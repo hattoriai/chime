@@ -106,6 +106,23 @@ def act("decline", _data, _notification), do: :ok
 or `{:ok, url}`, the notification keeps the action (`notification.action`)
 and is read; the person goes to `url`. An error leaves it as it was.
 
+## Previews
+
+`preview/0` gives the params to see the notifier with, in the admin's
+previews (see [The admin](admin.md)): one example, or `{name, params}`
+for more. They go through your `data/1` and `actor/1`, so plain maps of
+what those read are enough:
+
+```elixir
+@impl true
+def preview do
+  [
+    {"A comment", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: "Lovely.", author: %{id: 7, name: "Ana"}}}},
+    {"A long one", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: String.duplicate("Lovely. ", 40), author: %{id: 7, name: "Ana"}}}}
+  ]
+end
+```
+
 ## Guards
 
 Your app's rules about who may be told: "may this member read the

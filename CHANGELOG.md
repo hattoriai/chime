@@ -80,5 +80,7 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The admin, `chime_admin` with the app's `Chime.Admin.Access`: the
   deliveries of the last day, the failed and "Send again"
   (`Chime.resend/1`), the events, each person, each notification's log.
+- Previews: the notifier's `preview/0`, and the admin's `/previews`, each
+  notifier as its channels say it, alone and as a group.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

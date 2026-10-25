@@ -204,6 +204,22 @@ defmodule Chime.Notifier do
               :ok | {:ok, String.t()} | {:error, term()}
 
   @doc """
+  Params to see the notifier with, in the admin's previews
+  (`Chime.Router.Admin`): a map, as `Chime.notify/3` gets them, or a list
+  of `{name, params}` for more than one. They are given to `data/1` and
+  `actor/1`, so they can be plain maps of what those read:
+
+      @impl true
+      def preview do
+        [
+          {"A comment", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: "Lovely.", author: %{id: 7, name: "Ana"}}}},
+          {"A long one", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: String.duplicate("Lovely. ", 40), author: %{id: 7, name: "Ana"}}}}
+        ]
+      end
+  """
+  @callback preview() :: term() | [{String.t(), term()}]
+
+  @doc """
   The email: a `Swoosh.Email` with its subject and body. Chime gives it
   its `To:` and, unless the notification is required, the link and the
   headers to unsubscribe; its `From:` is the config's unless it has one.
@@ -220,6 +236,7 @@ defmodule Chime.Notifier do
                       notify?: 2,
                       feed: 2,
                       act: 3,
+                      preview: 0,
                       email: 3
 
   @units %{second: 1, minute: 60, hour: 3600, day: 86_400}

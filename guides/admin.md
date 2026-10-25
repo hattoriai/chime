@@ -48,6 +48,11 @@ LiveViews use your app's LiveView socket.
   deliveries with "Send again" for those that failed or were skipped, and
   its data.
 
+* **Previews** - each notifier with a `preview/0`, as its channels say
+  it: the feed, the feed as a group of three, the email (its HTML in a
+  sandboxed frame), the push and your channels, and the data. Give the
+  mount `otp_app: :my_app` to find your notifiers.
+
 "Send again" is `Chime.resend/1`: the delivery is scheduled now, its
 attempts from nought, and what is decided at its time (the preferences,
 the conditions, the rules) is decided again.

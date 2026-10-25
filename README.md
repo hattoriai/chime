@@ -36,6 +36,7 @@ and by channels of your own, as each person wants. It gives your app:
   Phoenix does not render (React, Vue, a mobile app);
 * its words in your languages, through your own Gettext, and each
   email and digest in the person's language;
+* previews of each notifier, as each of its channels says it;
 * `Chime.Test`, to assert what was notified and run the deliveries in
   your tests, with no Oban to drain and no clock to wait for.
 

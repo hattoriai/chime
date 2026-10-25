@@ -33,6 +33,7 @@ defmodule Chime.Admin.Layouts do
     ~H"""
     <header class="bar">
       <.link navigate={~m"/"} class="brand">Chime</.link>
+      <.link navigate={~m"/previews"}>Previews</.link>
       <form action={~m"/"} method="get" class="find">
         <input type="search" name="person" placeholder="A person's id: user:42" aria-label="Find a person" />
       </form>

@@ -39,7 +39,9 @@ defmodule ChimeTest.Host do
 
   use PhoenixMountable.TestHost,
     otp_app: :chime,
-    mounts: [{Chime.Router.Admin, "/admin/notifications", access: ChimeTest.AdminAccess}],
+    mounts: [
+      {Chime.Router.Admin, "/admin/notifications", access: ChimeTest.AdminAccess, otp_app: :chime}
+    ],
     routes:
       (quote do
          import Chime.Router

@@ -125,6 +125,14 @@ defmodule ChimeTest.NewComment do
   def telegram(data, _recipient, _notification), do: "New comment on #{data["story"]}"
 
   def telegram?(_data, recipient), do: recipient.data[:telegram] != nil
+
+  @impl true
+  def preview do
+    [
+      {"A comment", %{story: "Tokyo", text: "Lovely.", author: "Ana"}},
+      {"A long one", %{story: "Kyoto", text: String.duplicate("So good. ", 20), author: "Rui"}}
+    ]
+  end
 end
 
 defmodule ChimeTest.PaymentFailed do
@@ -362,6 +370,9 @@ defmodule ChimeTest.Invited do
   def act("accept", %{"team" => "full"}, _notification), do: {:error, :team_full}
   def act("accept", data, _notification), do: {:ok, "/teams/#{data["team"]}"}
   def act("decline", _data, _notification), do: :ok
+
+  @impl true
+  def preview, do: %{team: "Kyoto"}
 
   @impl true
   def email(data, _recipient, notification) do

@@ -39,7 +39,8 @@ defmodule Chime.Router.Admin do
     ],
     otp_app: [
       type: :atom,
-      doc: "The app whose notifiers the previews show, all of its modules of `Chime.Notifier`."
+      doc:
+        "The app whose notifiers the previews show: its modules of `Chime.Notifier` with `preview/0`. Without it, the notifiers loaded."
     ]
   )
 
@@ -47,6 +48,8 @@ defmodule Chime.Router.Admin do
     live "/", Chime.Admin.HomeLive, :index
     live "/people/:recipient", Chime.Admin.PersonLive, :show
     live "/notifications/:id", Chime.Admin.NotificationLive, :show
+    live "/previews", Chime.Admin.PreviewsLive, :index
+    live "/previews/:notifier", Chime.Admin.PreviewsLive, :show
   end
 
   # Whether the request's person may see the admin, read from the request
