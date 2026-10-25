@@ -42,7 +42,9 @@ defmodule Chime.SchedulingTest do
       {:ok, event} =
         Chime.notify(
           ChimeTest.ChannelMessage,
-          %{to: [ana, rui], text: "Hi", author: "x", blocked: ["user:2"]}, at: minutes(5))
+          %{to: [ana, rui], text: "Hi", author: "x", blocked: ["user:2"]},
+          at: minutes(5)
+        )
 
       assert event.audience == ["user:1"]
       run_scheduled(minutes(6))
