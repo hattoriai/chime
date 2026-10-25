@@ -26,6 +26,21 @@ as a `Swoosh.Email`; Chime gives it:
 
 The mailer's id of the email is kept as the delivery's `ref`.
 
+## Read everywhere
+
+A link of an email that opens the notification reads it in the feed too:
+
+```elixir
+~s(<a href="#{Chime.link(notification, "/stories/42")}">Read it</a>)
+```
+
+`Chime.link/2` is an address of `chime_mail`, signed: opened, it marks
+the notification read and its `clicked_at`, tells the person's open
+pages, and redirects to the address (a path goes on the config's
+`:url`). Each email has the link of the feed's `:url` in its assigns, as
+`:link`, and the digests' links are such links. A channel of yours can
+use `Chime.link/2` the same way.
+
 A notifier's email in your app's templates:
 
 ```elixir

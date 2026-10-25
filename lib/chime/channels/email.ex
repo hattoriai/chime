@@ -14,7 +14,9 @@ defmodule Chime.Channels.Email do
       link, and `List-Unsubscribe-Post`. The same address is in the
       email's `assigns` as `:unsubscribe_url`, for a link in its footer,
       and the notifier's email can use `Chime.unsubscribe_url/2`. They
-      need `:unsubscribe_url` and `:secret_key_base` in the config.
+      need `:mail_url` and `:secret_key_base` in the config;
+    * the link that opens the notification and reads it in the feed, from
+      the feed's `:url`, in `assigns` as `:link` (`Chime.link/2`).
 
   The mailer's id of the email (`{:ok, %{id: id}}`) is kept as the
   delivery's ref, to match the provider's events later.
@@ -49,6 +51,7 @@ defmodule Chime.Channels.Email do
     case email do
       %{__struct__: Swoosh.Email} = email ->
         email
+        |> link(message)
         |> address(config, message)
         |> unsubscribe(config, message, message.category)
         |> send_email(config)
@@ -56,6 +59,18 @@ defmodule Chime.Channels.Email do
       other ->
         raise ArgumentError,
               "#{inspect(message.notifier)}.email/3 must return a Swoosh.Email, got: #{inspect(other)}"
+    end
+  end
+
+  # The link that opens the notification (and reads it), from the feed's
+  # :url, for the email's templates.
+  defp link(email, %{notifier: notifier, data: data, notification: notification}) do
+    case Chime.Feed.render(notifier, data, notification) do
+      %{url: url} when is_binary(url) ->
+        Swoosh.Email.assign(email, :link, Chime.link(notification, url))
+
+      _ ->
+        email
     end
   end
 

@@ -30,7 +30,9 @@ defmodule Chime.Live do
   (which marks the feed seen) and close it; `chime:more` loads more;
   `chime:filter` (`%{"filter" => "unread"}` or `"inbox"`) shows the
   unread or all; `chime:read` and `chime:archive` (`%{"id" => id}`) mark
-  one; `chime:read_all` marks them all read; `chime:visit` (`%{"id" =>
+  one; `chime:read_all` marks them all read; `chime:action`
+  (`%{"id" => id, "action" => key}`) takes an action (`Chime.act/3`), and
+  goes where it says; `chime:visit` (`%{"id" =>
   id}`) marks one read and goes to its `:url`. The components send them,
   and a LiveView's own buttons can too (`phx-click="chime:toggle"`). The
   hook handles them, and the messages of the PubSub, before the LiveView
@@ -150,19 +152,32 @@ defmodule Chime.Live do
   defp handle_event("chime:archive", %{"id" => id}, socket), do: mark(socket, :archive, [id])
   defp handle_event("chime:read_all", _params, socket), do: mark(socket, :read, :all)
 
+  defp handle_event("chime:action", %{"id" => id, "action" => action}, socket) do
+    state = socket.assigns.chime
+
+    case Chime.act(state.recipient, id, action) do
+      {:ok, %{url: url}} ->
+        {:halt, socket} = update(socket, &load(&1, max(length(&1.items), &1.limit)))
+        go(socket, url)
+
+      {:error, _reason} ->
+        {:halt, socket}
+    end
+  end
+
   defp handle_event("chime:visit", %{"id" => id}, socket) do
     # The item before the mark: under the unread filter, it then leaves the list.
     item = Enum.find(socket.assigns.chime.items, &(&1.id == id))
     {:halt, socket} = mark(socket, :read, [id])
 
-    case item do
-      %{feed: %{url: "/" <> _ = path}} -> {:halt, push_navigate(socket, to: path)}
-      %{feed: %{url: "http" <> _ = url}} -> {:halt, redirect(socket, external: url)}
-      _ -> {:halt, socket}
-    end
+    go(socket, item && item.feed[:url])
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  defp go(socket, "/" <> _ = path), do: {:halt, push_navigate(socket, to: path)}
+  defp go(socket, "http" <> _ = url), do: {:halt, redirect(socket, external: url)}
+  defp go(socket, _nowhere), do: {:halt, socket}
 
   # A notification came: the counts, and the panel's list when it is open,
   # seen at once as the person looks at it.

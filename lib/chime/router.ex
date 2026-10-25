@@ -9,22 +9,23 @@ defmodule Chime.Router do
         chime_api "/notifications"
       end
 
-      # The links to unsubscribe of the emails: no session, no CSRF token,
-      # as a mail client posts them (RFC 8058).
-      pipeline :unsubscribe do
+      # The links of the emails: no session, no CSRF token, as a mail
+      # client posts the one to unsubscribe (RFC 8058).
+      pipeline :mail do
         plug :accepts, ["html"]
       end
 
       scope "/" do
-        pipe_through :unsubscribe
-        chime_unsubscribe "/notifications/unsubscribe"
+        pipe_through :mail
+        chime_mail "/notifications/mail"
       end
 
   `chime_api/2` mounts the feed and the preferences as JSON, for a
   frontend that Phoenix does not render (see `Chime.API` and the
-  [Any frontend](any_frontend.md) guide), and `chime_unsubscribe/2` the
-  page of the links to unsubscribe (see `Chime.Unsubscribe`), at the
-  config's `:unsubscribe_url`. Each is a library mounted with
+  [Any frontend](any_frontend.md) guide), and `chime_mail/2` the
+  addresses of the emails' links, to unsubscribe and to open a
+  notification (see `Chime.Router.Mail`), at the config's `:mail_url`.
+  Each is a library mounted with
   [PhoenixMountable](https://hexdocs.pm/phoenix_mountable): ordinary
   routes in the app's router (`mix phx.routes` lists them), behind the
   app's own scopes and pipelines.
@@ -33,7 +34,7 @@ defmodule Chime.Router do
   `Chime.Components` go in them.
   """
 
-  alias Chime.Router.Unsubscribe
+  alias Chime.Router.Mail
 
   use PhoenixMountable,
     otp_app: :chime,
@@ -61,6 +62,7 @@ defmodule Chime.Router do
     post "/:id/unread", Chime.API, :unread, as: :unread
     post "/:id/archive", Chime.API, :archive, as: :archive
     post "/:id/unarchive", Chime.API, :unarchive, as: :unarchive
+    post "/:id/actions/:action", Chime.API, :act, as: :act
   end
 
   @impl PhoenixMountable
@@ -71,13 +73,13 @@ defmodule Chime.Router do
   end
 
   @doc """
-  Mounts the page of the links to unsubscribe at `path`: see
-  `Chime.Unsubscribe`.
+  Mounts the addresses of the emails' links at `path`, the config's
+  `:mail_url`: see `Chime.Router.Mail`.
   """
-  defmacro chime_unsubscribe(path, opts \\ []) do
+  defmacro chime_mail(path, opts \\ []) do
     quote do
-      require unquote(Unsubscribe)
-      unquote(Unsubscribe).chime_unsubscribe(unquote(path), unquote(opts))
+      require unquote(Mail)
+      unquote(Mail).chime_mail(unquote(path), unquote(opts))
     end
   end
 end

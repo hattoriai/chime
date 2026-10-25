@@ -29,7 +29,7 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Chime.Live` and `Chime.Components`: the bell, the feed and the
   preferences in LiveView, live over PubSub.
 - `chime_api`: the feed and the preferences as JSON, a stream of
-  server-sent events, and tokens (`Chime.Token`); `chime_unsubscribe`, the
+  server-sent events, and tokens (`Chime.Token`); `chime_mail`, the
   page of the links to unsubscribe.
 - Chime's words in the app's languages, through the app's own Gettext
   (`:gettext`, `Chime.Messages`), from the template
@@ -59,5 +59,11 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   through in Oban jobs 1000 people a page, each page once, for an
   announcement to everyone; `recipient_id/1`, `audience_key:`,
   `Chime.Test.run_audiences/0`.
+- Actions: `actions` in `feed/2`, the notifier's `act/3`, `Chime.act/3`,
+  the feed's buttons in LiveView and `POST /:id/actions/:action`.
+- Read everywhere: `Chime.link/2`, a signed link that reads the
+  notification when it is opened, then redirects; the email's
+  `assigns.link`, and the digests' links, at `/open/:token` of
+  `chime_mail`.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

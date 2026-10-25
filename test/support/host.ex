@@ -41,7 +41,7 @@ defmodule ChimeTest.Host do
            plug :fetch_session
          end
 
-         pipeline :unsubscribe do
+         pipeline :mail do
            plug :accepts, ["html"]
          end
 
@@ -51,8 +51,8 @@ defmodule ChimeTest.Host do
          end
 
          scope "/" do
-           pipe_through :unsubscribe
-           chime_unsubscribe "/notifications/unsubscribe", app_name: "The app"
+           pipe_through :mail
+           chime_mail("/notifications/mail", app_name: "The app")
          end
 
          scope "/" do

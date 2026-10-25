@@ -62,6 +62,8 @@ them:
 * `chime:read`, `chime:archive` with `phx-value-id`.
 * `chime:read_all`.
 * `chime:visit` with `phx-value-id` - reads it, and goes to its `:url`.
+* `chime:action` with `phx-value-id` and `phx-value-action` - takes an
+  action of its feed's `:actions` (`Chime.act/3`), and goes where it says.
 
 ```heex
 <button phx-click="chime:toggle">

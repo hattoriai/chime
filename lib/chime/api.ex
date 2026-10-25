@@ -32,6 +32,11 @@ defmodule Chime.API do
     * `POST /:id/read`, `/:id/unread`, `/:id/archive`, `/:id/unarchive` -
       one notification. The counts; a 404 for one the person does not
       have.
+    * `POST /:id/actions/:action` - takes an action of the notification
+      (`Chime.act/3`): the counts, with `action` and `url` (where to go
+      next, or null); a 404, or a 422 with `"unknown_action"`,
+      `"already"` (an action was taken), or `"failed"` and the notifier's
+      `reason`.
     * `GET /preferences` - the person's settings:
       `{"categories": [{"key", "label", "description", "required",
       "settings": {"feed": "on", "email": "daily"}}], "channels": [{"key":
@@ -60,6 +65,8 @@ defmodule Chime.API do
         "body": "Lovely light.",
         "url": "/stories/42",
         "icon": "comment",
+        "actions": [{"key": "reply", "label": "Reply"}],
+        "action": null, "actedAt": null, "clickedAt": null,
         "extra": {},
         "count": 3,
         "actors": [{"id": "user:7", "name": "Ana"}],
@@ -195,6 +202,26 @@ defmodule Chime.API do
       json(conn, 200, mark(conn, config, recipient, action, [id]))
     else
       _ -> json(conn, 404, %{error: "not_found"})
+    end
+  end
+
+  defp handle(:act, conn, config, recipient) do
+    case Chime.Actions.act(config, recipient, conn.path_params["id"], conn.path_params["action"]) do
+      {:ok, %{action: action, url: url}} ->
+        json(
+          conn,
+          200,
+          Map.merge(Counts.get(config, recipient, ws(conn)), %{action: action, url: url})
+        )
+
+      {:error, :not_found} ->
+        json(conn, 404, %{error: "not_found"})
+
+      {:error, code} when code in [:unknown_action, :already] ->
+        json(conn, 422, %{error: Atom.to_string(code)})
+
+      {:error, reason} ->
+        json(conn, 422, %{error: "failed", reason: inspect(reason)})
     end
   end
 

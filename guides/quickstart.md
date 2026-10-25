@@ -80,7 +80,7 @@ children = [
    mailer: MyApp.Mailer,
    email_from: {"MyApp", "hello@myapp.com"},
    secret_key_base: Application.fetch_env!(:my_app, MyAppWeb.Endpoint)[:secret_key_base],
-   unsubscribe_url: "https://myapp.com/notifications/unsubscribe",
+   mail_url: "https://myapp.com/notifications/mail",
    url: "https://myapp.com",
    categories: [
      comments: [label: "Comments on your stories"],
@@ -159,19 +159,19 @@ end
 ## 8. The link to unsubscribe
 
 The emails carry a link, and the headers of one-click unsubscribe, to
-the config's `:unsubscribe_url`. Mount the page there, behind a pipeline
+the config's `:mail_url`. Mount the page there, behind a pipeline
 with no session and no CSRF protection, as a mail client posts it:
 
 ```elixir
 import Chime.Router
 
-pipeline :unsubscribe do
+pipeline :mail do
   plug :accepts, ["html"]
 end
 
 scope "/" do
-  pipe_through :unsubscribe
-  chime_unsubscribe "/notifications/unsubscribe", app_name: "MyApp"
+  pipe_through :mail
+  chime_mail "/notifications/mail", app_name: "MyApp"
 end
 ```
 

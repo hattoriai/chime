@@ -60,7 +60,7 @@ defmodule ChimeTest.DataCase do
       mailer: ChimeTest.Mailer,
       email_from: {"The app", "hello@app.test"},
       secret_key_base: String.duplicate("chime-test-secret-", 4),
-      unsubscribe_url: "https://app.test/notifications/unsubscribe",
+      mail_url: "https://app.test/notifications/mail",
       url: "https://app.test",
       categories: [
         comments: [label: "Comments", description: "On your stories"],

@@ -87,16 +87,16 @@ that turns off every email but the required.
 
 Each email has a link to turn off its category's emails, and the headers
 of one-click unsubscribe; the digest's turns off every email. Mount the
-page at the config's `:unsubscribe_url`:
+page at the config's `:mail_url`:
 
 ```elixir
-pipeline :unsubscribe do
+pipeline :mail do
   plug :accepts, ["html"]
 end
 
 scope "/" do
-  pipe_through :unsubscribe
-  chime_unsubscribe "/notifications/unsubscribe", app_name: "MyApp"
+  pipe_through :mail
+  chime_mail "/notifications/mail", app_name: "MyApp"
 end
 ```
 

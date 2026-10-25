@@ -81,6 +81,31 @@ Chime.notify(MyApp.Notifications.PaymentFailed, %{invoice: invoice}, to: invoice
 Nobody is told of what they did: the actor (`actor/1`) is left out of the
 recipients, unless the notifier says otherwise (`notify_actor: true`).
 
+## Actions
+
+`feed/2` can offer buttons, and `act/3` takes them:
+
+```elixir
+@impl true
+def feed(data, %{action: nil}) do
+  %{
+    title: "#{data["inviter"]} invited you to #{data["team"]}",
+    actions: [%{key: "accept", label: "Accept"}, %{key: "decline", label: "Decline"}]
+  }
+end
+
+def feed(data, %{action: action}), do: %{title: "You #{action}ed the invitation to #{data["team"]}"}
+
+@impl true
+def act("accept", data, notification), do: MyApp.Teams.join(data["team_id"], notification.recipient) |> then(fn _ -> {:ok, "/teams/#{data["team_id"]}"} end)
+def act("decline", _data, _notification), do: :ok
+```
+
+`Chime.act/3` (and the feed's buttons in LiveView, and `POST
+/:id/actions/:action` of the JSON API) calls `act/3`. When it says `:ok`
+or `{:ok, url}`, the notification keeps the action (`notification.action`)
+and is read; the person goes to `url`. An error leaves it as it was.
+
 ## Guards
 
 Your app's rules about who may be told: "may this member read the

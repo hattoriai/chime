@@ -14,6 +14,8 @@ and by channels of your own, as each person wants. It gives your app:
   counts, never a `COUNT(*)` on a page;
 * groups: "Ana and 4 others commented on Tokyo", one notification that
   comes back to the top, not five;
+* actions on a notification ("Accept", "Decline"), and links of emails
+  that read it in the feed when they are opened;
 * email through your Swoosh mailer, with one-click unsubscribe, and
   channels of your own (Telegram, SMS, Slack, push) in one behaviour;
 * delays and fallbacks: in the feed now, by email in ten minutes unless
@@ -53,7 +55,7 @@ PostgreSQL or SQLite.
 | The log | `Chime.explain/1`: the notification, each delivery, its status and reason: sent, skipped, waiting, digested, failed |
 | In the app | `Chime.Live` and `Chime.Components`: the bell with a dot, the feed, the preferences; live over PubSub, one message a node for a batch of people |
 | Any frontend | `chime_api`: the feed, the counts, the marks, the preferences, a stream of server-sent events, signed tokens (`Chime.Token`) |
-| Unsubscribe | `chime_unsubscribe`: the link of each email, a page that asks first, and the one-click POST of mail clients |
+| Unsubscribe | `chime_mail`: the link of each email, a page that asks first, and the one-click POST of mail clients |
 | Testing | `Chime.Test`: `assert_notified/2`, `refute_notified/2`, `feed/2`, `deliver/1`, `run_digests/1`, `explain/1` |
 | Database | PostgreSQL and SQLite, in a migration of your app (`Chime.Migrations`) |
 
@@ -82,7 +84,7 @@ Oban:
  mailer: MyApp.Mailer,
  email_from: {"MyApp", "hello@myapp.com"},
  secret_key_base: Application.fetch_env!(:my_app, MyAppWeb.Endpoint)[:secret_key_base],
- unsubscribe_url: "https://myapp.com/notifications/unsubscribe",
+ mail_url: "https://myapp.com/notifications/mail",
  categories: [
    comments: [label: "Comments on your stories"],
    followers: [label: "New followers", defaults: [email: :weekly]],

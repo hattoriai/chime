@@ -14,7 +14,7 @@ defmodule Chime.Config do
          mailer: MyApp.Mailer,
          email_from: {"Atelier", "hello@atelier.app"},
          secret_key_base: Application.fetch_env!(:my_app, MyAppWeb.Endpoint)[:secret_key_base],
-         unsubscribe_url: "https://atelier.app/notifications/unsubscribe",
+         mail_url: "https://atelier.app/notifications/mail",
          categories: [
            comments: [label: "Comments on your stories"],
            followers: [label: "New followers", defaults: [email: :weekly]],
@@ -60,10 +60,11 @@ defmodule Chime.Config do
       or an address (required with `:mailer`).
     * `:secret_key_base` - the secret that signs the links to unsubscribe
       and the tokens of the JSON API (`Chime.Token`). At least 32 bytes.
-    * `:unsubscribe_url` - the address where `chime_unsubscribe` is
-      mounted, whole (`"https://atelier.app/notifications/unsubscribe"`),
-      for the links and the `List-Unsubscribe` headers of the emails.
-      With `:secret_key_base`; without them, the emails have no link.
+    * `:mail_url` - the address where `chime_mail` is mounted, whole
+      (`"https://atelier.app/notifications/mail"`), for the links of the
+      emails: to unsubscribe (and the `List-Unsubscribe` headers), and to
+      open a notification, which reads it (`Chime.link/2`). With
+      `:secret_key_base`; without them, the emails have no such links.
     * `:digest` - when the digests go, in each person's time zone (UTC
       for a person without one):
         * `:at` - the hour (`9`, for 09:00).
@@ -103,7 +104,7 @@ defmodule Chime.Config do
     :mailer,
     :email_from,
     :secret_key_base,
-    :unsubscribe_url,
+    :mail_url,
     :url,
     :gettext,
     :quiet_hours,
@@ -132,7 +133,7 @@ defmodule Chime.Config do
           mailer: module() | nil,
           email_from: String.t() | {String.t(), String.t()} | nil,
           secret_key_base: String.t() | nil,
-          unsubscribe_url: String.t() | nil,
+          mail_url: String.t() | nil,
           url: String.t() | nil,
           gettext: module() | nil,
           quiet_hours: {0..23, 0..23} | nil,
@@ -166,8 +167,7 @@ defmodule Chime.Config do
       mailer: opts[:mailer],
       email_from: opts[:email_from],
       secret_key_base: secret_key_base(opts[:secret_key_base]),
-      unsubscribe_url:
-        opts[:unsubscribe_url] && String.trim_trailing(opts[:unsubscribe_url], "/"),
+      mail_url: opts[:mail_url] && String.trim_trailing(opts[:mail_url], "/"),
       url: opts[:url] && String.trim_trailing(opts[:url], "/"),
       gettext: opts[:gettext],
       quiet_hours: quiet_hours(opts[:quiet_hours]),

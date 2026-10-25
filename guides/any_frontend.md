@@ -36,6 +36,7 @@ JSON of a notification.
 | `POST /seen` | the dot goes |
 | `POST /read` | all read |
 | `POST /:id/read`, `/unread`, `/archive`, `/unarchive` | one |
+| `POST /:id/actions/:action` | an action of its `actions` (`Chime.act/3`): the counts, `action` and `url` |
 | `GET /preferences`, `PUT /preferences` | the settings |
 | `GET /stream` | server-sent events |
 | `POST /token` | a token of `Chime.Token` |

@@ -53,6 +53,11 @@ defmodule Chime.Migrations.V1 do
       add :seen_at, :utc_datetime_usec
       add :read_at, :utc_datetime_usec
       add :archived_at, :utc_datetime_usec
+      # Opened from a link of an email or a channel (Chime.link/2).
+      add :clicked_at, :utc_datetime_usec
+      # The action the person took on it, and when (Chime.act/3).
+      add :action, :string, size: 64
+      add :acted_at, :utc_datetime_usec
       timestamps(type: :utc_datetime_usec)
     end
 

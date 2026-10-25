@@ -94,7 +94,7 @@ defmodule Chime.Feed do
   @spec json(Notification.t()) :: map()
   def json(%Notification{} = n) do
     feed = render(n)
-    {known, extra} = Map.split(feed, [:title, :body, :url, :icon])
+    {known, extra} = Map.split(feed, [:title, :body, :url, :icon, :actions])
 
     %{
       id: n.id,
@@ -104,6 +104,13 @@ defmodule Chime.Feed do
       body: known[:body],
       url: known[:url],
       icon: known[:icon],
+      actions:
+        for %{key: key} = a <- known[:actions] || [] do
+          %{key: to_string(key), label: a[:label] || to_string(key)}
+        end,
+      action: n.action,
+      actedAt: n.acted_at,
+      clickedAt: n.clicked_at,
       extra: Map.new(extra, fn {k, v} -> {to_string(k), v} end),
       count: n.count,
       actors: n.actors,
@@ -136,8 +143,10 @@ defmodule Chime.Feed do
     {:ok, counts} =
       config.repo.transaction(fn ->
         Counts.lock(config, [recipient])
-        # Reading sees too, keeping the time of an earlier look.
-        if action == :read, do: update(config, query, :seen, now)
+        # Reading sees too, keeping the time of an earlier look; a click
+        # reads.
+        if action in [:read, :click], do: update(config, query, :seen, now)
+        if action == :click, do: update(config, query, :read, now)
         update(config, query, action, now)
         Map.fetch!(Counts.refresh(config, [recipient]), recipient)
       end)
@@ -165,6 +174,8 @@ defmodule Chime.Feed do
   defp change(query, :read, now) do
     {where(query, [n], is_nil(n.read_at)), read_at: now, grouping: false}
   end
+
+  defp change(query, :click, now), do: {where(query, [n], is_nil(n.clicked_at)), clicked_at: now}
 
   defp change(query, :unread, _now), do: {where(query, [n], not is_nil(n.read_at)), read_at: nil}
 

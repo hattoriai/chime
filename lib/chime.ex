@@ -260,9 +260,40 @@ defmodule Chime do
     end
   end
 
+  @doc ~S"""
+  A link to a notification, for an email or a channel, that reads it in
+  the feed when it is opened, then goes to `url` (a path goes on the
+  config's `:url`). See `Chime.Links`. Without the config's `:mail_url`
+  and `:secret_key_base`, the address itself.
+
+      ~s(<a href="#{Chime.link(notification, "/stories/42")}">Read it</a>)
+  """
+  @spec link(Notification.t(), String.t()) :: String.t()
+  def link(%Notification{} = notification, url) when is_binary(url) do
+    config = Config.get()
+
+    Chime.Token.open_url(config, notification.id, notification.recipient, url) ||
+      Chime.Links.address(config, url)
+  end
+
+  @doc """
+  Takes an action of a notification for its person: one of the
+  `:actions` of the notifier's `feed/2` (`%{key: "accept", label:
+  "Accept"}`), which calls the notifier's `act/3` with the key, the data
+  and the notification. When it says `:ok` or `{:ok, url}`, the
+  notification keeps the action and is read, and the person's pages are
+  told. Returns `{:ok, %{action: key, url: url | nil}}`, or
+  `{:error, :not_found | :unknown_action | :already | reason}`.
+  """
+  @spec act(String.t(), Ecto.UUID.t(), String.t()) ::
+          {:ok, %{action: String.t(), url: String.t() | nil}} | {:error, term()}
+  def act(recipient, notification_id, action) when is_binary(recipient) and is_binary(action) do
+    Chime.Actions.act(Config.get(), recipient, notification_id, action)
+  end
+
   @doc """
   The address to unsubscribe a person from a category's emails, for the
-  footer of a notifier's email; nil without `:unsubscribe_url` and
+  footer of a notifier's email; nil without `:mail_url` and
   `:secret_key_base` in the config.
   """
   @spec unsubscribe_url(Chime.Recipient.t() | String.t(), Notification.t() | String.t()) ::

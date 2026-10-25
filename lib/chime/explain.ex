@@ -61,6 +61,8 @@ defmodule Chime.Explain do
       n.count > 1 && {n.updated_at, "feed", "grouped", "#{n.count} events of #{n.group_key}"},
       n.seen_at && {n.seen_at, "feed", "seen", nil},
       n.read_at && {n.read_at, "feed", "read", nil},
+      n.clicked_at && {n.clicked_at, "link", "opened", "from a link of an email or a channel"},
+      n.acted_at && {n.acted_at, "feed", "action", n.action},
       n.archived_at && {n.archived_at, "feed", "archived", nil}
     ]
 

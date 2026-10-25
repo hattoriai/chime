@@ -186,8 +186,22 @@ defmodule Chime.Notifier do
   """
   @callback notify?(params(), Chime.Recipient.t()) :: boolean()
 
-  @doc "What the feed shows: `:title`, and `:body`, `:url` and `:icon`."
+  @doc """
+  What the feed shows: `:title`, and `:body`, `:url`, `:icon`, and
+  `:actions`, the buttons of the notification: `[%{key: "accept", label:
+  "Accept"}, %{key: "decline", label: "Decline"}]`, which `c:act/3`
+  takes. Once the person took one, `notification.action` is its key.
+  """
   @callback feed(data :: map(), Chime.Notification.t()) :: feed()
+
+  @doc """
+  Takes an action of the feed's `:actions` (`Chime.act/3`): with its key,
+  the data and the notification (`notification.recipient` is who takes
+  it). `:ok`, or `{:ok, url}` for where the person goes next; an error
+  leaves the notification as it was.
+  """
+  @callback act(action :: String.t(), data :: map(), Chime.Notification.t()) ::
+              :ok | {:ok, String.t()} | {:error, term()}
 
   @doc """
   The email: a `Swoosh.Email` with its subject and body. Chime gives it
@@ -205,6 +219,7 @@ defmodule Chime.Notifier do
                       workspace: 1,
                       notify?: 2,
                       feed: 2,
+                      act: 3,
                       email: 3
 
   @units %{second: 1, minute: 60, hour: 3600, day: 86_400}

@@ -99,7 +99,7 @@ defmodule Chime.NotifyTest do
         assert email.to == [{"Ana", "ana@app.test"}]
         assert email.from == {"The app", "hello@app.test"}
 
-        assert ["<https://app.test/notifications/unsubscribe/" <> _] = [
+        assert ["<https://app.test/notifications/mail/unsubscribe/" <> _] = [
                  email.headers["List-Unsubscribe"]
                ]
 

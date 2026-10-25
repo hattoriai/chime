@@ -14,7 +14,10 @@ defmodule Chime.Notification do
       the feed off for the category, while other channels still go.
     * `:seen_at` - when the person saw it in the feed (the bell's dot);
       `:read_at` - when they read it (opened it, or marked it read);
-      `:archived_at` - when they put it away.
+      `:archived_at` - when they put it away; `:clicked_at` - when they
+      opened it from a link of an email or a channel (`Chime.link/2`);
+      `:action` and `:acted_at` - the action they took on it, and when
+      (`Chime.act/3`).
     * `:updated_at` - when an event last joined it: the feed is in this
       order, so that a group with a new event comes up.
   """
@@ -37,6 +40,9 @@ defmodule Chime.Notification do
     field :seen_at, :utc_datetime_usec
     field :read_at, :utc_datetime_usec
     field :archived_at, :utc_datetime_usec
+    field :clicked_at, :utc_datetime_usec
+    field :action, :string
+    field :acted_at, :utc_datetime_usec
     has_many :deliveries, Chime.Delivery
     timestamps()
   end

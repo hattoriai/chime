@@ -335,3 +335,39 @@ defmodule ChimeTest.Announcement do
   @impl true
   def feed(data, _notification), do: %{title: data["title"]}
 end
+
+defmodule ChimeTest.Invited do
+  @moduledoc "A notifier of the tests with actions: an invitation to accept or decline."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+  deliver :email
+
+  @impl true
+  def data(%{team: team}), do: %{"team" => team}
+
+  @impl true
+  def feed(data, %{action: nil}) do
+    %{
+      title: "You are invited to #{data["team"]}",
+      url: "/teams/#{data["team"]}",
+      actions: [%{key: "accept", label: "Accept"}, %{key: "decline", label: "Decline"}]
+    }
+  end
+
+  def feed(data, %{action: action}),
+    do: %{title: "You #{action}ed #{data["team"]}", url: "/teams/#{data["team"]}"}
+
+  @impl true
+  def act("accept", %{"team" => "full"}, _notification), do: {:error, :team_full}
+  def act("accept", data, _notification), do: {:ok, "/teams/#{data["team"]}"}
+  def act("decline", _data, _notification), do: :ok
+
+  @impl true
+  def email(data, _recipient, notification) do
+    Swoosh.Email.new(
+      subject: "Join #{data["team"]}",
+      html_body: ~s(<a href="#{Chime.link(notification, "/teams/#{data["team"]}")}">Join</a>)
+    )
+  end
+end
