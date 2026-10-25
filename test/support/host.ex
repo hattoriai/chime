@@ -7,6 +7,14 @@ defmodule ChimeTest.AssignReader do
   end
 end
 
+defmodule ChimeTest.AdminAccess do
+  @moduledoc "The admin's access of the tests: an admin in the session."
+  @behaviour Chime.Admin.Access
+
+  @impl true
+  def allow?(conn), do: Plug.Conn.get_session(conn, "admin") == true
+end
+
 defmodule ChimeTest.BellLive do
   @moduledoc "A page of the app, with the bell, the feed and the preferences."
   use Phoenix.LiveView
@@ -31,6 +39,7 @@ defmodule ChimeTest.Host do
 
   use PhoenixMountable.TestHost,
     otp_app: :chime,
+    mounts: [{Chime.Router.Admin, "/admin/notifications", access: ChimeTest.AdminAccess}],
     routes:
       (quote do
          import Chime.Router

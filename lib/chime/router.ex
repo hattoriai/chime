@@ -34,7 +34,7 @@ defmodule Chime.Router do
   `Chime.Components` go in them.
   """
 
-  alias Chime.Router.Mail
+  alias Chime.Router.{Admin, Mail}
 
   use PhoenixMountable,
     otp_app: :chime,
@@ -75,6 +75,16 @@ defmodule Chime.Router do
     Chime.Config.get().repo
   rescue
     RuntimeError -> nil
+  end
+
+  @doc """
+  Mounts the admin at `path`: see `Chime.Router.Admin`.
+  """
+  defmacro chime_admin(path, opts \\ []) do
+    quote do
+      require unquote(Admin)
+      unquote(Admin).chime_admin(unquote(path), unquote(opts))
+    end
   end
 
   @doc """

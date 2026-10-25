@@ -223,6 +223,50 @@ defmodule Chime do
   @spec explain(Ecto.UUID.t() | Notification.t()) :: Chime.Explain.t() | nil
   def explain(notification), do: Chime.Explain.explain(Config.get(), notification)
 
+  @doc """
+  Sends a delivery again: one that failed or was skipped is scheduled now,
+  its attempts from nought, with "sent again" in the log; what is decided
+  at its time (the preferences, the conditions, the rules) is decided
+  again. `{:error, :not_found}` for an unknown one, `{:error, :waiting}`
+  for one that waits already.
+  """
+  @spec resend(Ecto.UUID.t()) :: :ok | {:error, :not_found | :waiting}
+  def resend(delivery_id) do
+    config = Config.get()
+    now = Chime.Schema.usec(DateTime.utc_now())
+
+    with {:ok, id} <- Ecto.UUID.cast(delivery_id),
+         %Chime.Delivery{} = delivery <-
+           config.repo.get(Chime.Delivery, id, prefix: config.prefix),
+         true <- delivery.status in ["failed", "skipped", "sent"] || {:error, :waiting} do
+      {:ok, :ok} =
+        config.repo.transaction(fn ->
+          import Ecto.Query
+
+          from(d in Chime.Delivery, where: d.id == ^id)
+          |> config.repo.update_all(
+            [
+              set: [
+                status: "scheduled",
+                attempts: 0,
+                reason: "sent again",
+                scheduled_at: now,
+                updated_at: now
+              ]
+            ],
+            prefix: config.prefix
+          )
+
+          Chime.Jobs.deliveries(config, [%{id: id, scheduled_at: now}])
+        end)
+
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :not_found}
+    end
+  end
+
   @doc "Subscribes the caller to a person's live news (see Live, above)."
   @spec subscribe(String.t()) :: :ok | {:error, term()}
   def subscribe(recipient) when is_binary(recipient) do

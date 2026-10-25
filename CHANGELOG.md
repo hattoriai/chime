@@ -77,5 +77,8 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (an Adaptive Card), `Chime.Channels.Webhook` (JSON, signed with HMAC)
   and `Chime.Channels.Twilio` (SMS); a person's address from their data,
   or one for everyone.
+- The admin, `chime_admin` with the app's `Chime.Admin.Access`: the
+  deliveries of the last day, the failed and "Send again"
+  (`Chime.resend/1`), the events, each person, each notification's log.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

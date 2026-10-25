@@ -1,0 +1,27 @@
+:root { --ink: #1c1917; --muted: #78716c; --line: #e7e5e4; --paper: #fff; --accent: #ea580c; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --ink: #f5f5f4; --muted: #a8a29e; --line: #292524; --paper: #0c0a09; } }
+* { box-sizing: border-box; }
+body.chime-admin { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+.bar { display: flex; gap: 1rem; align-items: center; padding: .75rem 1.5rem; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; color: var(--accent); text-decoration: none; }
+.find input { width: 22rem; max-width: 60vw; padding: .4rem .7rem; border: 1px solid var(--line); border-radius: .4rem; background: transparent; color: inherit; font: inherit; }
+main { padding: 1.5rem; max-width: 72rem; }
+h1 { font-size: 1.35rem; margin: 0 0 1rem; }
+h2 { font-size: 1rem; margin: 2rem 0 .5rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: .85rem; }
+a { color: inherit; }
+.muted, small { color: var(--muted); }
+.tiles { display: flex; flex-wrap: wrap; gap: .75rem; }
+.tile { border: 1px solid var(--line); border-radius: .5rem; padding: .6rem .9rem; min-width: 8rem; }
+.tile b { display: block; font-size: 1.3rem; }
+.status { font-size: .8rem; padding: .05rem .45rem; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.status-sent, .status-shown, .status-digested, .status-read { color: #15803d; }
+.status-failed { color: #b91c1c; border-color: #b91c1c; }
+.status-skipped { color: var(--muted); }
+.status-scheduled, .status-digest, .status-sending { color: #a16207; }
+button { font: inherit; padding: .25rem .7rem; border: 1px solid var(--line); border-radius: .4rem; background: transparent; color: inherit; cursor: pointer; }
+pre { background: color-mix(in srgb, var(--line) 50%, transparent); padding: .75rem; border-radius: .4rem; overflow: auto; font-size: .85rem; }
+.flash { padding: .5rem .8rem; border: 1px solid var(--line); border-radius: .4rem; margin-bottom: 1rem; }
+iframe { width: 100%; min-height: 18rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; }

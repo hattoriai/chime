@@ -10,12 +10,6 @@ the token and gives the app the notification, the person and the text
 of the reply, without the quoted message. An optional module, compiled
 when the app has Letterbox.
 
-## An admin
-
-A page, mounted behind the app's admin pipeline, to find a person's
-notifications and read their log (`Chime.explain/1`), and to see the
-deliveries that fail.
-
 ## The mail provider's events
 
 The `ref` of an email is the provider's id. Its webhooks (a bounce, a

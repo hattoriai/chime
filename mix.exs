@@ -86,6 +86,8 @@ defmodule Chime.MixProject do
         priv/static/chime.css
         priv/gettext/chime.pot
         priv/static/chime-sw.js
+        priv/static/chime-admin.css
+        priv/static/chime-admin.js
         mix.exs
         .formatter.exs
         guides
@@ -112,6 +114,7 @@ defmodule Chime.MixProject do
         "guides/preferences.md",
         "guides/workspaces.md",
         "guides/explain.md",
+        "guides/admin.md",
         "guides/live_view.md",
         "guides/any_frontend.md",
         "guides/languages.md",
@@ -129,6 +132,7 @@ defmodule Chime.MixProject do
           "guides/preferences.md",
           "guides/workspaces.md",
           "guides/explain.md",
+          "guides/admin.md",
           "guides/live_view.md",
           "guides/any_frontend.md",
           "guides/languages.md",
@@ -164,7 +168,16 @@ defmodule Chime.MixProject do
           Chime.Digest
         ],
         "In the app": [Chime.Live, Chime.Live.State, Chime.Components],
-        Mounting: [Chime.Router, Chime.API, Chime.Token, Chime.Unsubscribe],
+        Mounting: [
+          Chime.Router,
+          Chime.Router.Mail,
+          Chime.Router.Admin,
+          Chime.Admin.Access,
+          Chime.API,
+          Chime.Token,
+          Chime.Unsubscribe,
+          Chime.Links
+        ],
         Database: [Chime.Migrations],
         Testing: [Chime.Test]
       ]
