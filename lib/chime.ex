@@ -102,6 +102,7 @@ defmodule Chime do
   """
   @spec feed(String.t(), keyword()) :: [Notification.t()]
   def feed(recipient, opts \\ []) when is_binary(recipient) do
+    opts = Keyword.update(opts, :limit, 20, &min(&1, 100))
     Feed.list(Config.get(), recipient, opts)
   end
 

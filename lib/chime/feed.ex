@@ -18,7 +18,7 @@ defmodule Chime.Feed do
   @doc false
   @spec list(Config.t(), String.t(), keyword()) :: [Notification.t()]
   def list(%Config{} = config, recipient, opts) do
-    limit = opts |> Keyword.get(:limit, 20) |> min(100) |> max(1)
+    limit = opts |> Keyword.get(:limit, 20) |> max(1)
     filter = Keyword.get(opts, :filter, :inbox)
 
     unless filter in @filters do

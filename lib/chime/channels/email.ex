@@ -32,9 +32,21 @@ defmodule Chime.Channels.Email do
     do: {:skip, "the person has no email address"}
 
   def deliver(%Message{} = message, _opts) do
-    config = Config.get()
+    case Config.get() do
+      %Config{mailer: nil} ->
+        {:skip, "Chime's config has no :mailer"}
 
-    case message.notifier.email(message.data, message.recipient, message.notification) do
+      config ->
+        deliver(
+          message,
+          config,
+          message.notifier.email(message.data, message.recipient, message.notification)
+        )
+    end
+  end
+
+  defp deliver(message, config, email) do
+    case email do
       %{__struct__: Swoosh.Email} = email ->
         email
         |> address(config, message)
