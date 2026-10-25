@@ -25,6 +25,21 @@ if config_env() == :test do
     pool: Ecto.Adapters.SQL.Sandbox,
     pool_size: 5
 
+  # A database of its own for the checks of Chime's migrations, which
+  # empty it (test/chime/migrations_test.exs), and on PostgreSQL a schema
+  # of its own (a prefix).
+  config :chime, ChimeTest.MigrationsRepo,
+    database: Path.expand("../tmp/chime_migrations_test.sqlite3", __DIR__),
+    pool_size: 1
+
+  config :chime, ChimeTest.PostgresMigrationsRepo,
+    url:
+      System.get_env(
+        "CHIME_TEST_DATABASE_URL",
+        "ecto://postgres:postgres@localhost/chime_test"
+      ),
+    pool_size: 2
+
   config :chime, ecto_repos: [ChimeTest.SQLiteRepo, ChimeTest.PostgresRepo]
 
   config :chime, ChimeTest.Mailer, adapter: Swoosh.Adapters.Test

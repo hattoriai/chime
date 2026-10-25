@@ -37,6 +37,9 @@ defmodule Chime do
 
   use Supervisor
 
+  @typedoc "A person's counts: what they have not seen, and not read."
+  @type counts :: %{unseen: non_neg_integer(), unread: non_neg_integer()}
+
   alias Chime.{Config, Counts, Feed, Notification, Preferences}
 
   @doc "Starts Chime with the options of `Chime.Config`."
@@ -106,30 +109,30 @@ defmodule Chime do
   A person's counts: `%{unseen: n, unread: n}`, of the notifications of
   their feed not archived. One row, kept as notifications come and go.
   """
-  @spec counts(String.t()) :: Counts.counts()
+  @spec counts(String.t()) :: counts()
   def counts(recipient) when is_binary(recipient), do: Counts.get(Config.get(), recipient)
 
   @doc "Marks a person's feed as seen: the bell's dot goes. Returns the counts."
-  @spec mark_seen(String.t()) :: Counts.counts()
+  @spec mark_seen(String.t()) :: counts()
   def mark_seen(recipient), do: Feed.mark(Config.get(), recipient, :seen, :all)
 
   @doc """
   Marks notifications of a person as read (and seen): a list of ids, or
   `:all`. Returns the counts.
   """
-  @spec mark_read(String.t(), [String.t()] | :all) :: Counts.counts()
+  @spec mark_read(String.t(), [String.t()] | :all) :: counts()
   def mark_read(recipient, ids), do: Feed.mark(Config.get(), recipient, :read, ids)
 
   @doc "Marks notifications of a person as unread. Returns the counts."
-  @spec mark_unread(String.t(), [String.t()] | :all) :: Counts.counts()
+  @spec mark_unread(String.t(), [String.t()] | :all) :: counts()
   def mark_unread(recipient, ids), do: Feed.mark(Config.get(), recipient, :unread, ids)
 
   @doc "Archives notifications of a person: out of the inbox. Returns the counts."
-  @spec archive(String.t(), [String.t()] | :all) :: Counts.counts()
+  @spec archive(String.t(), [String.t()] | :all) :: counts()
   def archive(recipient, ids), do: Feed.mark(Config.get(), recipient, :archive, ids)
 
   @doc "Brings archived notifications of a person back. Returns the counts."
-  @spec unarchive(String.t(), [String.t()] | :all) :: Counts.counts()
+  @spec unarchive(String.t(), [String.t()] | :all) :: counts()
   def unarchive(recipient, ids), do: Feed.mark(Config.get(), recipient, :unarchive, ids)
 
   @doc """

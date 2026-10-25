@@ -13,7 +13,7 @@ defmodule Chime.Channels.Email do
       many emails: `List-Unsubscribe` with the address of the person's
       link, and `List-Unsubscribe-Post`. The same address is in the
       email's `assigns` as `:unsubscribe_url`, for a link in its footer,
-      and the notifier's email can use `Chime.unsubscribe_url/1`. They
+      and the notifier's email can use `Chime.unsubscribe_url/2`. They
       need `:unsubscribe_url` and `:secret_key_base` in the config.
 
   The mailer's id of the email (`{:ok, %{id: id}}`) is kept as the

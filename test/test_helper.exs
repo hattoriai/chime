@@ -19,6 +19,7 @@ _ = Ecto.Adapters.SQLite3.storage_up(ChimeTest.SQLiteRepo.config())
 {:ok, _pid} = ChimeTest.SQLiteRepo.start_link()
 migrate.(ChimeTest.SQLiteRepo)
 Ecto.Adapters.SQL.Sandbox.mode(ChimeTest.SQLiteRepo, :manual)
+{:ok, _pid} = ChimeTest.MigrationsRepo.start_link()
 
 # An Oban for each repo, which keeps its jobs for the tests to run.
 {:ok, _pid} =
@@ -35,6 +36,7 @@ postgres? =
       {:ok, _pid} = ChimeTest.PostgresRepo.start_link()
       migrate.(ChimeTest.PostgresRepo)
       Ecto.Adapters.SQL.Sandbox.mode(ChimeTest.PostgresRepo, :manual)
+      {:ok, _pid} = ChimeTest.PostgresMigrationsRepo.start_link()
 
       {:ok, _pid} =
         Oban.start_link(

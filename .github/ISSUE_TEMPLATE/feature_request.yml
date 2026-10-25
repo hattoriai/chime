@@ -1,0 +1,39 @@
+name: Feature request
+description: An idea, or a change to what Chime does.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. A change of behaviour or a new feature is agreed here before a pull request (see CONTRIBUTING.md). BACKLOG.md has the gaps already known.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, for whom (your people, your frontend, your team), and what stops you today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How it would look to an app (an option, a callback, a channel, a mount, a guide) and to its people. Say if it changes what Chime does today, or its tables.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else you considered
+      description: Other designs, and what you do today instead.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the open and closed issues.
+          required: true
+        - label: I would like to make the pull request myself.

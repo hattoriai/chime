@@ -21,3 +21,13 @@ defmodule ChimeTest.ObanMigration do
   def up, do: Oban.Migration.up()
   def down, do: Oban.Migration.down()
 end
+
+defmodule ChimeTest.MigrationsRepo do
+  @moduledoc "A repo on SQLite of its own, which the checks of the migrations empty."
+  use Ecto.Repo, otp_app: :chime, adapter: Ecto.Adapters.SQLite3
+end
+
+defmodule ChimeTest.PostgresMigrationsRepo do
+  @moduledoc "A repo on PostgreSQL with no sandbox, for the checks of the migrations in a prefix."
+  use Ecto.Repo, otp_app: :chime, adapter: Ecto.Adapters.Postgres
+end

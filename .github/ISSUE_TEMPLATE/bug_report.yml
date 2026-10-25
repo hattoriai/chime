@@ -1,0 +1,113 @@
+name: Bug report
+description: Something in Chime does not work as the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A security problem goes to a private report instead (see SECURITY.md).
+
+  - type: input
+    id: chime
+    attributes:
+      label: Chime version
+      description: From `mix.lock`, or `mix deps | grep chime`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: stack
+    attributes:
+      label: Elixir, OTP, Phoenix and LiveView versions
+      placeholder: "Elixir 1.20.1, OTP 29, Phoenix 1.8.1, LiveView 1.1.14"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where it happens
+      options:
+        - Notifiers and Chime.notify/3
+        - The feed, groups or counts
+        - Email, digests or unsubscribing
+        - A channel of my own
+        - Preferences
+        - The log (Chime.explain/1)
+        - The bell and feed in a LiveView (Chime.Live, Chime.Components)
+        - The JSON API or its stream
+        - The migrations
+        - Chime.Test
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - PostgreSQL
+        - SQLite
+    validations:
+      required: true
+
+  - type: input
+    id: database_versions
+    attributes:
+      label: Database and adapter versions
+      placeholder: "PostgreSQL 16, postgrex 0.21"
+
+  - type: input
+    id: extras
+    attributes:
+      label: Oban, Swoosh and the browser
+      description: The versions of Oban and Swoosh when they take part, and the browser for what the bell or the feed shows.
+      placeholder: "Oban 2.19, Swoosh 1.19, Safari 26"
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: The smallest setup that shows it
+      description: The notifier, the resolver, the options given to `Chime` and, if it matters, the mount in the router; or a link to a small repository.
+      render: elixir
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      placeholder: |
+        1. Turn email off for "comments"
+        2. Chime.notify(MyApp.Notifications.NewComment, ...)
+        3. Run the deliveries
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The error and its stacktrace, from the server log or the browser console.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I use a release from Hex, not `main`.
+          required: true
+        - label: I searched the open and closed issues, and BACKLOG.md.
+          required: true

@@ -107,7 +107,9 @@ defmodule Chime.MixProject do
         "guides/live_view.md",
         "guides/any_frontend.md",
         "guides/testing.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md"
       ],
       groups_for_extras: [
         Guides: [

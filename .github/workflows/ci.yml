@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # The notifications are tested on SQLite and on PostgreSQL.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Erlang and Elixir exactly as in .tool-versions.
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
+
+      - uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
+
+      - run: mix deps.get
+
+      - run: mix format --check-formatted
+
+      - run: mix compile --warnings-as-errors
+        env:
+          MIX_ENV: test
+
+      - run: mix credo --strict
+        env:
+          MIX_ENV: test
+
+      - run: mix docs
+        env:
+          MIX_ENV: dev
+
+      - run: mix test
+        env:
+          MIX_ENV: test
+
+      - run: mix dialyzer
+        env:
+          MIX_ENV: dev
+
+  # The lowest Elixir that mix.exs accepts (~> 1.18, for the built-in JSON
+  # module), with the lowest Phoenix (1.7) and LiveView (1.1) that it
+  # accepts (CHIME_OLDEST), so that the floors stay true.
+  floor:
+    runs-on: ubuntu-latest
+
+    env:
+      CHIME_OLDEST: "1"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.3"
+          otp-version: "27.2.2"
+
+      # mix.lock has the newest Phoenix and LiveView: resolve the oldest.
+      - run: mix deps.update phoenix phoenix_live_view
+
+      - run: mix deps.get
+
+      - run: mix compile --warnings-as-errors --force
+        env:
+          MIX_ENV: test
+
+      - run: mix test
+        env:
+          MIX_ENV: test
