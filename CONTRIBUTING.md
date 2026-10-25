@@ -71,6 +71,22 @@ A pull request with an issue says so: `Fixes #123` or `Closes #123`.
   also runs the tests with the oldest Elixir, Phoenix and LiveView that
   Chime supports (`CHIME_OLDEST=1`, see `.github/workflows/ci.yml`).
 
+The JavaScript of `priv/static/chime.js` and `chime-react.js` is built
+from `assets/src`; a change to it commits the bundles that
+`npm run build` gives, as CI checks:
+
+```sh
+cd assets
+npm ci
+npm run typecheck
+npm test
+npm run build
+```
+
+`mix dev` runs a small app at http://localhost:4100, with notifications,
+the bell, the admin at `/admin/notifications` and its previews, to see a
+change in a browser.
+
 The pull request template has these as a checklist.
 
 ## What the maintainers keep

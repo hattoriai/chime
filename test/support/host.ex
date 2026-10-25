@@ -2,8 +2,17 @@ defmodule ChimeTest.AssignReader do
   @moduledoc "The app's own on_mount: the person of the session, in the assigns."
   def on_mount(:default, _params, session, socket) do
     if locale = session["locale"], do: Gettext.put_locale(ChimeTest.Gettext, locale)
+    socket = Phoenix.Component.assign(socket, :current_workspace, session["workspace"])
     {:cont, Phoenix.Component.assign(socket, :current_reader, session["reader"])}
   end
+end
+
+defmodule ChimeTest.AdminAccess do
+  @moduledoc "The admin's access of the tests: an admin in the session."
+  @behaviour Chime.Admin.Access
+
+  @impl true
+  def allow?(conn), do: Plug.Conn.get_session(conn, "admin") == true
 end
 
 defmodule ChimeTest.BellLive do
@@ -30,6 +39,9 @@ defmodule ChimeTest.Host do
 
   use PhoenixMountable.TestHost,
     otp_app: :chime,
+    mounts: [
+      {Chime.Router.Admin, "/admin/notifications", access: ChimeTest.AdminAccess, otp_app: :chime}
+    ],
     routes:
       (quote do
          import Chime.Router
@@ -40,7 +52,7 @@ defmodule ChimeTest.Host do
            plug :fetch_session
          end
 
-         pipeline :unsubscribe do
+         pipeline :mail do
            plug :accepts, ["html"]
          end
 
@@ -50,8 +62,8 @@ defmodule ChimeTest.Host do
          end
 
          scope "/" do
-           pipe_through :unsubscribe
-           chime_unsubscribe "/notifications/unsubscribe", app_name: "The app"
+           pipe_through :mail
+           chime_mail("/notifications/mail", app_name: "The app")
          end
 
          scope "/" do

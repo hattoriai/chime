@@ -21,8 +21,10 @@ defmodule Chime.UnsubscribeTest do
     end
 
     test "a forged link is a 404", %{conn: conn} do
-      assert conn |> get("/notifications/unsubscribe/nope") |> html_response(404) =~ "not valid"
-      assert build_conn() |> post("/notifications/unsubscribe/nope") |> html_response(404)
+      assert conn |> get("/notifications/mail/unsubscribe/nope") |> html_response(404) =~
+               "not valid"
+
+      assert build_conn() |> post("/notifications/mail/unsubscribe/nope") |> html_response(404)
     end
   end
 end

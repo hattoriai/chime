@@ -1,15 +1,15 @@
 defmodule Chime.Unsubscribe do
   @moduledoc ~S"""
   The links to unsubscribe of the emails, mounted with
-  `Chime.Router.chime_unsubscribe/2` at the config's `:unsubscribe_url`:
+  `Chime.Router.chime_mail/2` at the config's `:mail_url`:
 
-      pipeline :unsubscribe do
+      pipeline :mail do
         plug :accepts, ["html"]
       end
 
       scope "/" do
-        pipe_through :unsubscribe
-        chime_unsubscribe "/notifications/unsubscribe", app_name: "Atelier"
+        pipe_through :mail
+        chime_mail "/notifications/mail", app_name: "Atelier"
       end
 
   An email of a notification has a link to turn off its category's

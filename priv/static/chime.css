@@ -115,3 +115,16 @@
 .chime-preferences th, .chime-preferences td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--chime-line); }
 
 .chime-preferences small { display: block; color: var(--chime-muted); font-weight: normal; }
+
+.chime-item { flex-wrap: wrap; }
+
+.chime-item-actions { order: 1; display: flex; gap: 0.5rem; width: 100%; padding: 0 1rem 0.65rem; }
+
+.chime-action {
+  padding: 0.25rem 0.75rem !important;
+  border: 1px solid var(--chime-line) !important;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.chime-action:first-child { background: var(--chime-ink) !important; color: var(--chime-paper) !important; border-color: var(--chime-ink) !important; }

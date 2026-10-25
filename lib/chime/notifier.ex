@@ -61,13 +61,19 @@ defmodule Chime.Notifier do
     * `:required` - it goes whatever the person's preferences, and its
       emails have no link to unsubscribe (`false`; a category of
       `required: true` makes all its notifiers so).
+    * `:notify_actor` - whether the person who did it (`c:actor/1`) is
+      notified too, when they are among the recipients (`false`: nobody is
+      told of what they did).
+    * `:audience_key` - with `c:audience/1`: the field of the query's
+      first binding its pages go by (`:id`).
     * `:group_window` - with `c:group/1`: how long a notification stays
       open to the events of its group, from the first (`{1, :hour}`).
 
   ## Channels
 
   `deliver/2` declares a channel, in the order they go: `:feed`, the
-  bell and its list in the app; `:email`, through the app's mailer; or
+  bell and its list in the app (decided when the notification comes, with
+  `:if` and `:unless` of the notifier's functions only); `:email`, through the app's mailer; or
   one of the app's `:channels` (`Chime.Channel`). Options:
 
     * `:wait` - how long after the notification it goes: `{10, :minute}`
@@ -80,6 +86,16 @@ defmodule Chime.Notifier do
       any of them.
     * `:if` - it goes only if this function of the notifier,
       `(data, recipient) -> boolean`, says so; or `{module, function}`.
+    * `:throttle` - at most one by the channel for a group (or, with no
+      group, for the notifier) in this time: `{15, :minute}`. One that
+      comes sooner waits for the end of it.
+    * `:debounce` - with `:wait`: each event that joins the group while
+      it waits moves its time to `:wait` after that event, so a quick run
+      of events (messages a minute apart) goes as one. `:max_wait` is the
+      most it waits from the first (none).
+    * `:quiet` - `false` sends it in the person's quiet hours too
+      (`:quiet_hours` of `Chime.Config`). A required notification always
+      goes.
 
   ## What it says
 
@@ -113,6 +129,27 @@ defmodule Chime.Notifier do
   @callback recipients(params()) :: [term()]
 
   @doc """
+  Everyone it goes to, for many people: a query of the app's (`Ecto.Query`),
+  from the event's data, instead of `c:recipients/1`. Chime goes through it
+  in Oban jobs, 1000 people a page, by the key of the query's first
+  binding (`:audience_key` of `use`, `:id`), and makes each key a person's
+  id with `c:recipient_id/1`:
+
+      @impl true
+      def audience(_data), do: from(u in MyApp.User, where: not is_nil(u.confirmed_at))
+
+      @impl true
+      def recipient_id(id), do: "user:\#{id}"
+
+  The guard (`c:notify?/2`) is not asked of an audience: its people are
+  the query's.
+  """
+  @callback audience(data :: map()) :: Ecto.Queryable.t()
+
+  @doc "The id of a person of the audience, from its key (the key as a string)."
+  @callback recipient_id(term()) :: String.t()
+
+  @doc """
   What is kept of the params, as JSON (a map of strings, numbers, lists
   and maps), for the feed and the channels to render from. By default,
   the params themselves, as JSON.
@@ -131,8 +168,56 @@ defmodule Chime.Notifier do
   """
   @callback group(params()) :: String.t() | nil
 
-  @doc "What the feed shows: `:title`, and `:body`, `:url` and `:icon`."
+  @doc """
+  The workspace it happens in: the id of a team, an organisation, a
+  collective of the app's, as a string, or nil (nil). Its notifications
+  are of that workspace: a feed, counts and preferences can be of one
+  workspace (see the [Workspaces](workspaces.md) guide). `Chime.notify/3`
+  with `:workspace` gives it instead.
+  """
+  @callback workspace(params()) :: String.t() | nil
+
+  @doc """
+  Whether a person is notified at all: the guard of the app's rules, such
+  as "may this person read the channel?", checked for each person when
+  the notification comes, with the params of `Chime.notify/3` and the
+  `Chime.Recipient` (as the resolver gives them). A person it says no to
+  gets nothing, by any channel. By default, everyone.
+  """
+  @callback notify?(params(), Chime.Recipient.t()) :: boolean()
+
+  @doc """
+  What the feed shows: `:title`, and `:body`, `:url`, `:icon`, and
+  `:actions`, the buttons of the notification: `[%{key: "accept", label:
+  "Accept"}, %{key: "decline", label: "Decline"}]`, which `c:act/3`
+  takes. Once the person took one, `notification.action` is its key.
+  """
   @callback feed(data :: map(), Chime.Notification.t()) :: feed()
+
+  @doc """
+  Takes an action of the feed's `:actions` (`Chime.act/3`): with its key,
+  the data and the notification (`notification.recipient` is who takes
+  it). `:ok`, or `{:ok, url}` for where the person goes next; an error
+  leaves the notification as it was.
+  """
+  @callback act(action :: String.t(), data :: map(), Chime.Notification.t()) ::
+              :ok | {:ok, String.t()} | {:error, term()}
+
+  @doc """
+  Params to see the notifier with, in the admin's previews
+  (`Chime.Router.Admin`): a map, as `Chime.notify/3` gets them, or a list
+  of `{name, params}` for more than one. They are given to `data/1` and
+  `actor/1`, so they can be plain maps of what those read:
+
+      @impl true
+      def preview do
+        [
+          {"A comment", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: "Lovely.", author: %{id: 7, name: "Ana"}}}},
+          {"A long one", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: String.duplicate("Lovely. ", 40), author: %{id: 7, name: "Ana"}}}}
+        ]
+      end
+  """
+  @callback preview() :: term() | [{String.t(), term()}]
 
   @doc """
   The email: a `Swoosh.Email` with its subject and body. Chime gives it
@@ -141,7 +226,18 @@ defmodule Chime.Notifier do
   """
   @callback email(data :: map(), Chime.Recipient.t(), Chime.Notification.t()) :: struct()
 
-  @optional_callbacks recipients: 1, data: 1, actor: 1, group: 1, feed: 2, email: 3
+  @optional_callbacks recipients: 1,
+                      audience: 1,
+                      recipient_id: 1,
+                      data: 1,
+                      actor: 1,
+                      group: 1,
+                      workspace: 1,
+                      notify?: 2,
+                      feed: 2,
+                      act: 3,
+                      preview: 0,
+                      email: 3
 
   @units %{second: 1, minute: 60, hour: 3600, day: 86_400}
 
@@ -164,7 +260,13 @@ defmodule Chime.Notifier do
       @impl Chime.Notifier
       def group(_params), do: nil
 
-      defoverridable data: 1, actor: 1, group: 1
+      @impl Chime.Notifier
+      def workspace(_params), do: nil
+
+      @impl Chime.Notifier
+      def recipient_id(key), do: to_string(key)
+
+      defoverridable data: 1, actor: 1, group: 1, workspace: 1, recipient_id: 1
 
       @before_compile Chime.Notifier
     end
@@ -192,6 +294,8 @@ defmodule Chime.Notifier do
       def __chime__(:category), do: unquote(config.category)
       def __chime__(:kind), do: unquote(config.kind)
       def __chime__(:required), do: unquote(config.required)
+      def __chime__(:notify_actor), do: unquote(config.notify_actor)
+      def __chime__(:audience_key), do: unquote(config.audience_key)
       def __chime__(:group_window), do: unquote(config.group_window)
     end
   end
@@ -258,28 +362,23 @@ defmodule Chime.Notifier do
       category: category,
       kind: to_string(kind),
       required: Keyword.get(opts, :required, false) == true,
+      notify_actor: Keyword.get(opts, :notify_actor, false) == true,
+      audience_key: Keyword.get(opts, :audience_key, :id),
       group_window: seconds(module, :group_window, Keyword.get(opts, :group_window, {1, :hour}))
     }
   end
 
   @doc false
   def __delivery__(module, channel, opts) when is_atom(channel) and is_list(opts) do
-    case Keyword.split(opts, [:wait, :if, :unless]) do
-      {_opts, []} ->
-        :ok
-
-      {_opts, other} ->
-        raise ArgumentError,
-              "deliver takes :wait, :if and :unless, got: #{inspect(Keyword.keys(other))}"
-    end
-
-    if channel == :feed and (opts[:wait] || opts[:if] || opts[:unless]) do
-      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no condition"
-    end
+    check_delivery(module, channel, opts)
 
     %{
       channel: Atom.to_string(channel),
       wait: seconds(module, :wait, Keyword.get(opts, :wait, 0)),
+      throttle: opts[:throttle] && seconds(module, :throttle, opts[:throttle]),
+      debounce: Keyword.get(opts, :debounce, false) == true,
+      max_wait: opts[:max_wait] && seconds(module, :max_wait, opts[:max_wait]),
+      quiet: Keyword.get(opts, :quiet, true) != false,
       if: conditions(module, :if, opts[:if]),
       unless: conditions(module, :unless, opts[:unless])
     }
@@ -288,6 +387,37 @@ defmodule Chime.Notifier do
   def __delivery__(module, channel, _opts) do
     raise ArgumentError,
           "#{inspect(module)}: deliver takes the name of a channel (:feed, :email, ...), got: #{inspect(channel)}"
+  end
+
+  @known [:wait, :if, :unless, :throttle, :debounce, :max_wait, :quiet]
+
+  defp check_delivery(module, channel, opts) do
+    case Keyword.split(opts, @known) do
+      {_opts, []} ->
+        :ok
+
+      {_opts, other} ->
+        raise ArgumentError,
+              "deliver takes #{Enum.map_join(@known, ", ", &inspect/1)}, got: #{inspect(Keyword.keys(other))}"
+    end
+
+    if channel == :feed, do: check_feed(module, opts)
+
+    if opts[:max_wait] && !opts[:debounce] do
+      raise ArgumentError, "#{inspect(module)}: :max_wait is the limit of :debounce"
+    end
+  end
+
+  defp check_feed(module, opts) do
+    for key <- [:wait, :throttle, :debounce, :max_wait, :quiet], Keyword.has_key?(opts, key) do
+      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no #{inspect(key)}"
+    end
+
+    if Enum.any?(List.wrap(opts[:unless]), &(&1 in [:read, :seen])) do
+      raise ArgumentError,
+            "#{inspect(module)}: the feed is decided when the notification comes, " <>
+              "before it can be read or seen"
+    end
   end
 
   defp seconds(_module, _key, seconds) when is_integer(seconds) and seconds >= 0, do: seconds

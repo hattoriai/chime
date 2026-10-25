@@ -229,8 +229,8 @@ defmodule Chime.Digest do
         else: Messages.t("Your notifications of the week")
 
     lines =
-      Enum.map(items, fn %{feed: feed} ->
-        url = link(config, feed[:url])
+      Enum.map(items, fn %{feed: feed, notification: n} ->
+        url = link(config, n, feed[:url])
 
         Enum.join(
           Enum.filter(
@@ -242,8 +242,8 @@ defmodule Chime.Digest do
       end)
 
     html =
-      Enum.map_join(items, "", fn %{feed: feed} ->
-        url = link(config, feed[:url])
+      Enum.map_join(items, "", fn %{feed: feed, notification: n} ->
+        url = link(config, n, feed[:url])
 
         heading =
           if url,
@@ -261,11 +261,17 @@ defmodule Chime.Digest do
     )
   end
 
-  defp link(_config, nil), do: nil
-  defp link(_config, "http" <> _ = url), do: url
-  defp link(%Config{url: nil}, _path), do: nil
-  defp link(%Config{url: base}, "/" <> _ = path), do: base <> path
-  defp link(_config, _other), do: nil
+  # A link that opens the notification and reads it, or the address
+  # whole, or none for a path with no :url of the app's.
+  defp link(_config, _notification, nil), do: nil
+
+  defp link(config, notification, url) do
+    case Chime.link(notification, url) do
+      "http" <> _ = link -> link
+      _path when config.url == nil -> nil
+      path -> config.url <> path
+    end
+  end
 
   defp escape(text),
     do: text |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()

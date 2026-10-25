@@ -33,6 +33,43 @@ defmodule Chime.Jobs do
   end
 
   @doc false
+  # The job of a scheduled event, at its time.
+  @spec notify(Config.t(), Ecto.UUID.t(), DateTime.t()) :: :ok
+  def notify(%Config{oban: oban}, event_id, at) do
+    check_queue(oban)
+
+    {:ok, _job} =
+      Oban.insert(
+        oban.name,
+        Chime.Worker.new(%{"job" => "notify", "id" => event_id},
+          queue: oban.queue,
+          max_attempts: 5,
+          scheduled_at: at
+        )
+      )
+
+    :ok
+  end
+
+  @doc false
+  # The job of an audience's next page, after a cursor.
+  @spec audience(Config.t(), Ecto.UUID.t(), String.t() | nil) :: :ok
+  def audience(%Config{oban: oban}, event_id, cursor) do
+    check_queue(oban)
+
+    {:ok, _job} =
+      Oban.insert(
+        oban.name,
+        Chime.Worker.new(%{"job" => "audience", "id" => event_id, "cursor" => cursor},
+          queue: oban.queue,
+          max_attempts: 10
+        )
+      )
+
+    :ok
+  end
+
+  @doc false
   # At boot, on each node: the digests' job and the cleanup's, one each in
   # the cluster (unique).
   @spec boot(Config.t()) :: :ok

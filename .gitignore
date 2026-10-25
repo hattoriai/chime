@@ -10,3 +10,6 @@ chime-*.tar
 
 # Claude Code: personal settings and plugin work folders stay local.
 /.claude/settings.local.json
+
+# The JavaScript packages of assets/.
+/assets/node_modules

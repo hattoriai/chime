@@ -14,6 +14,11 @@ and by channels of your own, as each person wants. It gives your app:
   counts, never a `COUNT(*)` on a page;
 * groups: "Ana and 4 others commented on Tokyo", one notification that
   comes back to the top, not five;
+* actions on a notification ("Accept", "Decline"), and links of emails
+  that read it in the feed when they are opened;
+* push to browsers (Web Push), iPhones (APNs) and Android (FCM), each
+  person's devices kept, those gone forgotten;
+* Slack, Discord, Microsoft Teams, signed webhooks and SMS by Twilio;
 * email through your Swoosh mailer, with one-click unsubscribe, and
   channels of your own (Telegram, SMS, Slack, push) in one behaviour;
 * delays and fallbacks: in the feed now, by email in ten minutes unless
@@ -21,13 +26,17 @@ and by channels of your own, as each person wants. It gives your app:
 * preferences, a setting for each category and channel, required
   categories that cannot be turned off, and daily and weekly digests in
   each person's time zone;
+* workspaces (teams, organisations), each with its feed, counts and
+  preferences;
 * a log of every decision, with its reason: why a person got an email,
-  and why they did not;
+  and why they did not, and an admin to read it, with what failed and a
+  button to send it again;
 * the bell and the feed in your LiveViews, live over PubSub, across tabs;
 * a JSON API with a stream of server-sent events, for a frontend that
   Phoenix does not render (React, Vue, a mobile app);
 * its words in your languages, through your own Gettext, and each
   email and digest in the person's language;
+* previews of each notifier, as each of its channels says it;
 * `Chime.Test`, to assert what was notified and run the deliveries in
   your tests, with no Oban to drain and no clock to wait for.
 
@@ -51,7 +60,7 @@ PostgreSQL or SQLite.
 | The log | `Chime.explain/1`: the notification, each delivery, its status and reason: sent, skipped, waiting, digested, failed |
 | In the app | `Chime.Live` and `Chime.Components`: the bell with a dot, the feed, the preferences; live over PubSub, one message a node for a batch of people |
 | Any frontend | `chime_api`: the feed, the counts, the marks, the preferences, a stream of server-sent events, signed tokens (`Chime.Token`) |
-| Unsubscribe | `chime_unsubscribe`: the link of each email, a page that asks first, and the one-click POST of mail clients |
+| Unsubscribe | `chime_mail`: the link of each email, a page that asks first, and the one-click POST of mail clients |
 | Testing | `Chime.Test`: `assert_notified/2`, `refute_notified/2`, `feed/2`, `deliver/1`, `run_digests/1`, `explain/1` |
 | Database | PostgreSQL and SQLite, in a migration of your app (`Chime.Migrations`) |
 
@@ -80,7 +89,7 @@ Oban:
  mailer: MyApp.Mailer,
  email_from: {"MyApp", "hello@myapp.com"},
  secret_key_base: Application.fetch_env!(:my_app, MyAppWeb.Endpoint)[:secret_key_base],
- unsubscribe_url: "https://myapp.com/notifications/unsubscribe",
+ mail_url: "https://myapp.com/notifications/mail",
  categories: [
    comments: [label: "Comments on your stories"],
    followers: [label: "New followers", defaults: [email: :weekly]],
@@ -196,10 +205,13 @@ Chime.explain(notification_id) |> Chime.Explain.format() |> IO.puts()
 * [Quickstart](guides/quickstart.md): from the dependency to the first notification in the bell.
 * [Notifiers](guides/notifiers.md): recipients, data, groups, channels, delays and conditions.
 * [Channels](guides/channels.md): the feed, email, and channels of your own.
+* [Push](guides/push.md): browsers, iPhones and Android phones; the keys, devices, the service worker.
 * [Preferences](guides/preferences.md): categories, settings, required notifications, digests, unsubscribe links.
+* [Workspaces](guides/workspaces.md): teams, organisations, collectives: a feed, counts and preferences for each.
 * [The log](guides/explain.md): what Chime decided, and why.
+* [The admin](guides/admin.md): the deliveries, what failed and sending it again, each person, each notification's log.
 * [In LiveView](guides/live_view.md): the bell, the feed and the preferences.
-* [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, a React hook.
+* [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, the client and its React package.
 * [Languages](guides/languages.md): Chime's words through your Gettext.
 * [Testing](guides/testing.md): `Chime.Test`.
 

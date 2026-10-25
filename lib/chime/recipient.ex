@@ -10,12 +10,14 @@ defmodule Chime.Recipient do
       words (`Gettext.with_locale/3`).
     * `:time_zone` - an IANA time zone (`"Europe/Lisbon"`), for the hour
       of the digests. UTC without one, or without a time zone database.
+    * `:quiet_hours` - their own quiet hours, `{22, 8}`, over the
+      config's; `false` for none; nil for the config's.
     * `:data` - anything else the app's notifiers and channels need: a
       phone number, a Telegram chat, the user itself.
   """
 
   @enforce_keys [:id]
-  defstruct [:id, :email, :name, :locale, :time_zone, data: %{}]
+  defstruct [:id, :email, :name, :locale, :time_zone, :quiet_hours, data: %{}]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -23,6 +25,7 @@ defmodule Chime.Recipient do
           name: String.t() | nil,
           locale: String.t() | nil,
           time_zone: String.t() | nil,
+          quiet_hours: {0..23, 0..23} | false | nil,
           data: term()
         }
 end

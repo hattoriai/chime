@@ -64,7 +64,15 @@ defmodule Chime.Resolver do
   @callback resolve_recipient(Plug.Conn.t() | Phoenix.LiveView.Socket.t()) ::
               Chime.Recipient.t() | nil
 
-  @optional_callbacks recipient: 1
+  @doc """
+  The workspace of a request or a LiveView (a team, an organisation of
+  the app's), or nil for the whole feed. With it, the bell, the feed, its
+  counts and the preferences of `Chime.Live` and the JSON API are that
+  workspace's. Without this function, the whole feed.
+  """
+  @callback resolve_workspace(Plug.Conn.t() | Phoenix.LiveView.Socket.t()) :: String.t() | nil
+
+  @optional_callbacks recipient: 1, resolve_workspace: 1
 
   @doc false
   # The recipient of what a notifier gives: a recipient as it is, an id,
@@ -95,6 +103,18 @@ defmodule Chime.Resolver do
   @spec id(Chime.Recipient.t() | String.t()) :: String.t()
   def id(%Chime.Recipient{id: id}), do: id
   def id(id) when is_binary(id), do: id
+
+  @doc false
+  # The workspace of a request or a socket, or nil.
+  @spec workspace(module(), Plug.Conn.t() | Phoenix.LiveView.Socket.t()) :: String.t() | nil
+  def workspace(resolver, conn_or_socket) do
+    if Code.ensure_loaded?(resolver) and function_exported?(resolver, :resolve_workspace, 1) do
+      case resolver.resolve_workspace(conn_or_socket) do
+        nil -> nil
+        workspace -> to_string(workspace)
+      end
+    end
+  end
 
   @doc false
   # The reader of a request or a socket, as an id, or nil.

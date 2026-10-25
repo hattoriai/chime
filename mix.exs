@@ -44,6 +44,7 @@ defmodule Chime.MixProject do
 
   defp deps do
     [
+      {:bandit, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       # The notifications live in the app's database, on PostgreSQL or
@@ -64,6 +65,8 @@ defmodule Chime.MixProject do
       {:phoenix, if(@oldest, do: "~> 1.7.14", else: "~> 1.7.14 or ~> 1.8")},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_view, if(@oldest, do: "~> 1.1.0", else: "~> 1.1")},
+      # The :push channel's requests to Web Push, APNs and FCM.
+      {:req, "~> 0.5", optional: true},
       # The :email channel, with the app's own mailer.
       {:swoosh, "~> 1.17", optional: true},
       {:telemetry, "~> 1.0"}
@@ -83,6 +86,13 @@ defmodule Chime.MixProject do
         lib
         priv/static/chime.css
         priv/gettext/chime.pot
+        priv/static/chime-sw.js
+        priv/static/chime-admin.css
+        priv/static/chime-admin.js
+        priv/static/chime.js
+        priv/static/chime-react.js
+        priv/static/types
+        package.json
         mix.exs
         .formatter.exs
         guides
@@ -105,8 +115,11 @@ defmodule Chime.MixProject do
         "guides/quickstart.md",
         "guides/notifiers.md",
         "guides/channels.md",
+        "guides/push.md",
         "guides/preferences.md",
+        "guides/workspaces.md",
         "guides/explain.md",
+        "guides/admin.md",
         "guides/live_view.md",
         "guides/any_frontend.md",
         "guides/languages.md",
@@ -120,8 +133,11 @@ defmodule Chime.MixProject do
           "guides/quickstart.md",
           "guides/notifiers.md",
           "guides/channels.md",
+          "guides/push.md",
           "guides/preferences.md",
+          "guides/workspaces.md",
           "guides/explain.md",
+          "guides/admin.md",
           "guides/live_view.md",
           "guides/any_frontend.md",
           "guides/languages.md",
@@ -146,11 +162,27 @@ defmodule Chime.MixProject do
           Chime.Channel,
           Chime.Message,
           Chime.Channels.Email,
+          Chime.Channels.Push,
+          Chime.Channels.Slack,
+          Chime.Channels.Discord,
+          Chime.Channels.Teams,
+          Chime.Channels.Webhook,
+          Chime.Channels.Twilio,
+          Chime.Device,
           Chime.Delivery,
           Chime.Digest
         ],
         "In the app": [Chime.Live, Chime.Live.State, Chime.Components],
-        Mounting: [Chime.Router, Chime.API, Chime.Token, Chime.Unsubscribe],
+        Mounting: [
+          Chime.Router,
+          Chime.Router.Mail,
+          Chime.Router.Admin,
+          Chime.Admin.Access,
+          Chime.API,
+          Chime.Token,
+          Chime.Unsubscribe,
+          Chime.Links
+        ],
         Database: [Chime.Migrations],
         Testing: [Chime.Test]
       ]
@@ -159,6 +191,8 @@ defmodule Chime.MixProject do
 
   defp aliases do
     [
+      # The development server: dev.exs, at http://localhost:4100.
+      dev: ["run --no-halt dev.exs"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",

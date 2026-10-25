@@ -68,7 +68,7 @@ defmodule Chime.DigestTest do
       assert_email_sent(fn email ->
         assert email.subject == "Your notifications of the day"
         assert email.text_body =~ "Ana commented on Tokyo"
-        assert email.html_body =~ ~s(<a href="https://app.test/stories/Tokyo">)
+        assert email.html_body =~ ~s(<a href="https://app.test/notifications/mail/open/)
       end)
     end
 

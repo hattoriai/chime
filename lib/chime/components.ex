@@ -97,6 +97,11 @@ defmodule Chime.Components do
             <span :if={item.feed[:body]} class="chime-item-body">{item.feed[:body]}</span>
             <time class="chime-item-time" datetime={DateTime.to_iso8601(item.notification.updated_at)}>{ago(item.notification.updated_at)}</time>
           </button>
+          <div :if={item.feed[:actions] && is_nil(item.notification.action)} class="chime-item-actions">
+            <button :for={a <- item.feed[:actions]} type="button" class="chime-action" phx-click="chime:action" phx-value-id={item.id} phx-value-action={a.key} data-action={a.key}>
+              {a[:label] || a.key}
+            </button>
+          </div>
           <button type="button" class="chime-item-archive" phx-click="chime:archive" phx-value-id={item.id} aria-label={@archive} title={@archive}>×</button>
         </li>
       </ul>

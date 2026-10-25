@@ -25,7 +25,7 @@ defmodule Chime.Explain do
 
   import Ecto.Query
 
-  alias Chime.{Config, Delivery, Event, Notification}
+  alias Chime.{Config, Delivery, Notification}
 
   @typedoc "A step of the log."
   @type step :: %{
@@ -61,6 +61,8 @@ defmodule Chime.Explain do
       n.count > 1 && {n.updated_at, "feed", "grouped", "#{n.count} events of #{n.group_key}"},
       n.seen_at && {n.seen_at, "feed", "seen", nil},
       n.read_at && {n.read_at, "feed", "read", nil},
+      n.clicked_at && {n.clicked_at, "link", "opened", "from a link of an email or a channel"},
+      n.acted_at && {n.acted_at, "feed", "action", n.action},
       n.archived_at && {n.archived_at, "feed", "archived", nil}
     ]
 
@@ -78,25 +80,21 @@ defmodule Chime.Explain do
     |> Enum.sort_by(& &1.at, DateTime)
   end
 
-  # Whether it was in the feed: shown, turned off by the person, or not a
-  # notification of the feed at all.
+  # Whether it was in the feed: shown, or not, when a "feed" delivery
+  # says why (or the notifier has no feed).
   defp feed_step(%Notification{in_feed: true} = n), do: {n.inserted_at, "feed", "shown", nil}
 
-  defp feed_step(%Notification{} = n) do
-    case Event.notifier(n.event) do
-      nil ->
-        {n.inserted_at, "feed", "skipped", nil}
-
-      notifier ->
-        if Enum.any?(notifier.__chime__(:deliveries), &(&1.channel == "feed")),
-          do:
-            {n.inserted_at, "feed", "skipped", "the person turned off the feed for #{n.category}"},
-          else: false
-    end
-  end
+  # Kept out of the feed: its "feed" delivery says why.
+  defp feed_step(%Notification{}), do: false
 
   defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: nil}),
     do: "waits until #{time(at)}"
+
+  defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: "sent again"}),
+    do: "sent again, at #{time(at)}"
+
+  defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: reason}),
+    do: "waits until #{time(at)}: #{reason}"
 
   defp delivery_reason(%Delivery{status: "digest", reason: period}),
     do: "waits for the person's #{period} digest"
@@ -112,7 +110,8 @@ defmodule Chime.Explain do
   def format(nil), do: "no such notification"
 
   def format(%{notification: n, steps: steps}) do
-    head = "#{time(n.inserted_at)}  #{n.kind}  to #{n.recipient}  (#{n.category})"
+    where = if n.workspace, do: "#{n.category}, in #{n.workspace}", else: n.category
+    head = "#{time(n.inserted_at)}  #{n.kind}  to #{n.recipient}  (#{where})"
 
     lines =
       Enum.map(steps, fn step ->
