@@ -45,5 +45,9 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   out of the recipients unless `notify_actor: true`; a notification kept
   out of the feed has a `"feed"` delivery with the reason, for the log.
   A base module of the app's for its notifiers, in the Notifiers guide.
+- Scheduled notifications (`Chime.notify/3` with `:at`), and
+  `Chime.cancel/2`: a scheduled event not sent, a sent one's waiting
+  deliveries skipped, and with `feed: :remove` its notifications out of
+  the feeds. `Chime.Test.run_scheduled/1`.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

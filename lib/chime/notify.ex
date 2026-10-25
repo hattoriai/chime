@@ -25,6 +25,7 @@ defmodule Chime.Notify do
 
     now = opts |> Keyword.get_lazy(:now, &DateTime.utc_now/0) |> Chime.Schema.usec()
     category = Config.category(config, notifier.__chime__(:category))
+
     deliveries = notifier.__chime__(:deliveries)
     Enum.each(deliveries, &check_channel(config, notifier, &1.channel))
 
@@ -49,14 +50,24 @@ defmodule Chime.Notify do
       inserted_at: now
     }
 
-    feed = Enum.find(deliveries, &(&1.channel == "feed"))
+    plan = plan(config, notifier, event, deliveries, now, params: params, known: known)
 
-    plan = %{
+    case opts[:at] do
+      nil -> now(plan, ids, opts)
+      at -> schedule(plan, ids, Chime.Schema.usec(at), opts)
+    end
+  end
+
+  defp plan(config, notifier, event, deliveries, now, opts) do
+    feed = Enum.find(deliveries, &(&1.channel == "feed"))
+    category = Config.category(config, event.category)
+
+    %{
       config: config,
       notifier: notifier,
-      params: params,
-      known: known,
-      guard: function_exported?(notifier, :notify?, 2),
+      params: opts[:params],
+      known: Keyword.get(opts, :known, %{}),
+      guard: Keyword.has_key?(opts, :params) and function_exported?(notifier, :notify?, 2),
       feed_spec: feed,
       event: event,
       category: category,
@@ -65,41 +76,186 @@ defmodule Chime.Notify do
       channels: Enum.reject(deliveries, &(&1.channel == "feed")),
       now: now
     }
+  end
 
-    [first | rest] = if ids == [], do: [[]], else: Enum.chunk_every(ids, @batch)
+  defp now(%{config: config, event: event} = plan, ids, opts) do
+    [first | rest] = batches(ids)
 
     first_batch =
       config.repo.transaction(fn ->
-        case config.repo.insert_all(Event, [event],
-               on_conflict: :nothing,
-               conflict_target: :key,
-               prefix: config.prefix
-             ) do
-          {1, _} ->
+        case insert_event(config, event) do
+          :ok ->
             close_groups(plan)
             batch(plan, first)
 
-          {0, _} ->
+          :duplicate ->
             config.repo.rollback(:duplicate)
         end
       end)
 
     case first_batch do
-      {:ok, counts} ->
-        Fanout.notified(config, counts)
-        notified = map_size(counts) + Enum.sum(Enum.map(rest, &rest_batch(plan, &1)))
-        if notified != length(ids), do: notified(config, event, notified)
-
-        :telemetry.execute([:chime, :notify], %{recipients: notified}, %{
-          notifier: notifier,
-          event_id: event.id
-        })
-
-        {:ok, config.repo.get!(Event, event.id, prefix: config.prefix)}
-
-      {:error, :duplicate} ->
-        {:error, :duplicate, config.repo.get_by!(Event, [key: opts[:key]], prefix: config.prefix)}
+      {:ok, counts} -> {:ok, finish(plan, ids, counts, rest)}
+      {:error, :duplicate} -> duplicate(config, opts)
     end
+  end
+
+  defp batches([]), do: [[]]
+  defp batches(ids), do: Enum.chunk_every(ids, @batch)
+
+  defp insert_event(config, event) do
+    case config.repo.insert_all(Event, [event],
+           on_conflict: :nothing,
+           conflict_target: :key,
+           prefix: config.prefix
+         ) do
+      {1, _} -> :ok
+      {0, _} -> :duplicate
+    end
+  end
+
+  defp duplicate(config, opts) do
+    {:error, :duplicate, config.repo.get_by!(Event, [key: opts[:key]], prefix: config.prefix)}
+  end
+
+  # After the first batch: the news of it, the other batches, the event's
+  # count of people.
+  defp finish(%{config: config, event: event} = plan, ids, counts, rest) do
+    Fanout.notified(config, counts)
+    notified = map_size(counts) + Enum.sum(Enum.map(rest, &rest_batch(plan, &1)))
+    if notified != length(ids), do: notified(config, event, notified)
+
+    :telemetry.execute([:chime, :notify], %{recipients: notified}, %{
+      notifier: plan.notifier,
+      event_id: event.id
+    })
+
+    config.repo.get!(Event, event.id, prefix: config.prefix)
+  end
+
+  # A notification for later: the guard decides now, with the params; the
+  # event keeps its people, and a job runs it at its time.
+  defp schedule(%{config: config, event: event} = plan, ids, at, opts) do
+    ids = ids |> batches() |> Enum.flat_map(&(plan |> guard(&1) |> elem(0)))
+
+    event =
+      Map.merge(event, %{
+        status: "scheduled",
+        scheduled_at: at,
+        audience: ids,
+        recipients: length(ids)
+      })
+
+    result =
+      config.repo.transaction(fn ->
+        case insert_event(config, event) do
+          :ok -> Chime.Jobs.notify(config, event.id, at)
+          :duplicate -> config.repo.rollback(:duplicate)
+        end
+      end)
+
+    case result do
+      {:ok, :ok} -> {:ok, config.repo.get!(Event, event.id, prefix: config.prefix)}
+      {:error, :duplicate} -> duplicate(config, opts)
+    end
+  end
+
+  @doc false
+  # A scheduled event's time came: claimed (a cancelled one, or one sent
+  # already, does nothing), then its people notified as now.
+  @spec fire(Config.t(), Ecto.UUID.t(), DateTime.t()) :: :ok
+  def fire(%Config{} = config, id, now \\ DateTime.utc_now()) do
+    now = Chime.Schema.usec(now)
+
+    result =
+      config.repo.transaction(fn ->
+        claim =
+          from(e in Event, where: e.id == ^id and e.status == "scheduled", select: e)
+          |> config.repo.update_all([set: [status: "sent"]], prefix: config.prefix)
+
+        case claim do
+          {1, [event]} -> fire_first(config, event, now)
+          {0, _} -> :done
+        end
+      end)
+
+    case result do
+      {:ok, {plan, ids, counts, rest}} -> finish(plan, ids, counts, rest)
+      {:ok, :done} -> :ok
+    end
+
+    :ok
+  end
+
+  defp fire_first(config, %Event{} = event, now) do
+    case Event.notifier(event) do
+      nil ->
+        :done
+
+      notifier ->
+        ids = event.audience || []
+        event = Map.take(event, [:id, :kind, :category, :workspace, :data, :actor, :group_key])
+        plan = plan(config, notifier, event, notifier.__chime__(:deliveries), now, [])
+        [first | rest] = batches(ids)
+        close_groups(plan)
+        {plan, ids, batch(plan, first), rest}
+    end
+  end
+
+  @doc false
+  # Cancels an event: one scheduled is not sent; one sent has its
+  # deliveries that wait skipped, and with `feed: :remove`, its
+  # notifications that hold it alone taken out of the feeds.
+  @spec cancel(Config.t(), Event.t(), keyword()) ::
+          {:ok, %{deliveries: non_neg_integer(), removed: non_neg_integer()}}
+  def cancel(%Config{} = config, %Event{status: "scheduled"} = event, _opts) do
+    from(e in Event, where: e.id == ^event.id and e.status == "scheduled")
+    |> config.repo.update_all([set: [status: "cancelled"]], prefix: config.prefix)
+
+    {:ok, %{deliveries: 0, removed: 0}}
+  end
+
+  def cancel(%Config{} = config, %Event{} = event, opts) do
+    now = DateTime.utc_now()
+    notifications = from(n in Notification, where: n.event_id == ^event.id, select: n.id)
+
+    {:ok, {deliveries, removed}} =
+      config.repo.transaction(fn ->
+        {deliveries, _} =
+          from(d in Delivery,
+            where:
+              d.notification_id in subquery(notifications) and d.status in ["scheduled", "digest"]
+          )
+          |> config.repo.update_all(
+            [set: [status: "skipped", reason: "the notification was cancelled", updated_at: now]],
+            prefix: config.prefix
+          )
+
+        {deliveries, remove(config, event, opts[:feed])}
+      end)
+
+    {:ok, %{deliveries: deliveries, removed: removed}}
+  end
+
+  defp remove(_config, _event, nil), do: 0
+
+  defp remove(config, event, :remove) do
+    rows =
+      from(n in Notification,
+        where: n.event_id == ^event.id and n.count == 1,
+        select: {n.id, n.recipient}
+      )
+      |> config.repo.all(prefix: config.prefix)
+
+    people = rows |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+    Counts.lock(config, people)
+    ids = Enum.map(rows, &elem(&1, 0))
+    config.repo.delete_all(from(n in Notification, where: n.id in ^ids), prefix: config.prefix)
+
+    config
+    |> Counts.refresh(people)
+    |> Enum.each(fn {recipient, counts} -> Fanout.updated(config, recipient, counts) end)
+
+    length(ids)
   end
 
   defp rest_batch(%{config: config} = plan, ids) do

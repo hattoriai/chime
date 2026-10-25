@@ -157,6 +157,19 @@ defmodule Chime.Test do
   end
 
   @doc """
+  Sends the scheduled notifications (`Chime.notify/3` with `:at`) whose
+  time came by `at` (now), as their jobs would.
+  """
+  @spec run_scheduled(DateTime.t()) :: :ok
+  def run_scheduled(at \\ DateTime.utc_now()) do
+    config = Config.get()
+
+    from(e in Event, where: e.status == "scheduled" and e.scheduled_at <= ^at, select: e.id)
+    |> config.repo.all(prefix: config.prefix)
+    |> Enum.each(&Chime.Notify.fire(config, &1, at))
+  end
+
+  @doc """
   Sends the digests due at a time (now), as the hourly job would: for a
   daily digest at 9:00, a time after 9:00 the day after the notification.
   """

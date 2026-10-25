@@ -11,6 +11,10 @@ defmodule Chime.Worker do
     Deliver.perform(Config.get(), id, job.attempt >= job.max_attempts)
   end
 
+  def perform(%Oban.Job{args: %{"job" => "notify", "id" => id}}) do
+    Chime.Notify.fire(Config.get(), id)
+  end
+
   def perform(%Oban.Job{args: %{"job" => "digest"}}) do
     config = Config.get()
     now = DateTime.utc_now()

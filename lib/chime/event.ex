@@ -14,6 +14,9 @@ defmodule Chime.Event do
     * `:key` - the idempotency key it was given, or nil: a second call
       with the same key does nothing.
     * `:recipients` - how many people it notified.
+    * `:status` - `"sent"`; `"scheduled"` until its time, `:scheduled_at`
+      (`Chime.notify/3` with `:at`), its people kept in `:audience`; or
+      `"cancelled"` before it (`Chime.cancel/2`).
   """
 
   use Chime.Schema
@@ -28,6 +31,9 @@ defmodule Chime.Event do
     field :group_key, :string
     field :key, :string
     field :recipients, :integer, default: 0
+    field :status, :string, default: "sent"
+    field :scheduled_at, :utc_datetime_usec
+    field :audience, {:array, :string}
     field :inserted_at, :utc_datetime_usec
   end
 

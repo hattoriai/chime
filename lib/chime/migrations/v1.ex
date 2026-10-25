@@ -17,6 +17,11 @@ defmodule Chime.Migrations.V1 do
       add :group_key, :string, size: 255
       add :key, :string, size: 255
       add :recipients, :integer, null: false, default: 0
+      # "sent", or "scheduled" until its time (with its people kept in
+      # audience), or "cancelled" before it.
+      add :status, :string, size: 16, null: false, default: "sent"
+      add :scheduled_at, :utc_datetime_usec
+      add :audience, {:array, :string}
       add :inserted_at, :utc_datetime_usec, null: false
     end
 

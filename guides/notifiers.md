@@ -189,6 +189,33 @@ conditions, the person's preferences then, the person themselves
 (`recipients/1` of the resolver: a person who left gets nothing). Each
 decision is written in the log, with its reason (see [The log](explain.md)).
 
+## Later, and cancelled
+
+`:at` sends a notification at a time instead of now:
+
+```elixir
+Chime.notify(MyApp.Notifications.TrialEnding, %{user: user}, to: user, at: trial_ends_at |> DateTime.add(-3, :day), key: "trial:#{user.id}")
+```
+
+The event is `"scheduled"` and a job notifies its people at its time.
+Who they are, and the guard (`notify?/2`), are decided now; the feed,
+the preferences and the channels then.
+
+`Chime.cancel/2` takes the idempotency key (or the event):
+
+```elixir
+# The comment was deleted: don't email about it.
+Chime.cancel("comment:#{comment.id}")
+
+# ...and take it out of the feeds.
+Chime.cancel("comment:#{comment.id}", feed: :remove)
+```
+
+A scheduled event is then not sent. A sent one has its deliveries that
+wait skipped, with "the notification was cancelled" in the log; with
+`feed: :remove`, its notifications leave the feeds, but those of a group
+that holds other events too.
+
 ## Many people
 
 `Chime.notify/3` inserts the notifications in batches of 1000, each its

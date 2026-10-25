@@ -100,7 +100,7 @@ defmodule ChimeTest.DataCase do
       author: Keyword.get(opts, :author, "Ana")
     }
 
-    Chime.notify(ChimeTest.NewComment, params, Keyword.take(opts, [:key, :now]))
+    Chime.notify(ChimeTest.NewComment, params, Keyword.take(opts, [:key, :now, :at]))
   end
 
   @doc "Minutes from now, or from a time."

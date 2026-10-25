@@ -78,6 +78,10 @@ defmodule Chime do
       app's users, `Chime.Recipient`s or ids.
     * `:workspace` - the workspace it happens in, instead of the
       notifier's `workspace/1` (see the [Workspaces](workspaces.md) guide).
+    * `:at` - a time to notify at, instead of now: the event is
+      `"scheduled"`, and a job notifies its people then. The guard
+      (`notify?/2`) and the people are decided now; the feed, the
+      preferences and the channels at its time. `cancel/2` stops it.
     * `:key` - an idempotency key: a second call with the same key does
       nothing, and returns `{:error, :duplicate, event}`. Give one when
       the call may run twice (a retried job): `"comment:#{comment.id}"`.
@@ -90,6 +94,34 @@ defmodule Chime do
           {:ok, Chime.Event.t()} | {:error, :duplicate, Chime.Event.t()}
   def notify(notifier, params, opts \\ []) when is_atom(notifier) do
     Chime.Notify.run(Config.get(), notifier, params, opts)
+  end
+
+  @doc ~S"""
+  Cancels an event, by its idempotency key or the event:
+
+      Chime.cancel("comment:#{comment.id}")
+
+  A scheduled event (`:at`) is not sent. One sent has its deliveries that
+  wait (an email in ten minutes, a digest) skipped, with "the
+  notification was cancelled" in the log. With `feed: :remove`, its
+  notifications are taken out of the feeds too, but those of a group that
+  holds other events. Returns `{:ok, %{deliveries: n, removed: n}}`, or
+  `{:error, :not_found}`.
+  """
+  @spec cancel(String.t() | Chime.Event.t(), keyword()) ::
+          {:ok, %{deliveries: non_neg_integer(), removed: non_neg_integer()}}
+          | {:error, :not_found}
+  def cancel(key_or_event, opts \\ [])
+
+  def cancel(%Chime.Event{} = event, opts), do: Chime.Notify.cancel(Config.get(), event, opts)
+
+  def cancel(key, opts) when is_binary(key) do
+    config = Config.get()
+
+    case config.repo.get_by(Chime.Event, [key: key], prefix: config.prefix) do
+      nil -> {:error, :not_found}
+      event -> Chime.Notify.cancel(config, event, opts)
+    end
   end
 
   @doc """
