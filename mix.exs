@@ -124,6 +124,7 @@ defmodule Chime.MixProject do
         "guides/any_frontend.md",
         "guides/languages.md",
         "guides/testing.md",
+        "guides/features.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "SECURITY.md"
@@ -141,7 +142,8 @@ defmodule Chime.MixProject do
           "guides/live_view.md",
           "guides/any_frontend.md",
           "guides/languages.md",
-          "guides/testing.md"
+          "guides/testing.md",
+          "guides/features.md"
         ]
       ],
       groups_for_modules: [
