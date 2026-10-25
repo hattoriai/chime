@@ -94,25 +94,24 @@ defmodule Chime.Deliver do
   end
 
   defp conditions(notifier, spec, data, recipient, notification) do
-    unless_reason =
-      Enum.find_value(spec.unless, fn condition ->
-        case condition do
-          :read -> notification.read_at && Explain.read(notification.read_at)
-          :seen -> notification.seen_at && Explain.seen(notification.seen_at)
-          condition -> call(notifier, condition, data, recipient) && "unless #{name(condition)}"
-        end
-      end)
+    reason =
+      Enum.find_value(spec.unless, &unless_reason(&1, notifier, data, recipient, notification)) ||
+        Enum.find_value(spec.if, &if_reason(&1, notifier, data, recipient))
 
-    if_reason =
-      Enum.find_value(spec.if, fn condition ->
-        !call(notifier, condition, data, recipient) && "if #{name(condition)} was false"
-      end)
-
-    case unless_reason || if_reason do
-      nil -> :ok
-      reason -> {:skip, reason}
-    end
+    if reason, do: {:skip, reason}, else: :ok
   end
+
+  defp unless_reason(:read, _notifier, _data, _recipient, notification),
+    do: notification.read_at && Explain.read(notification.read_at)
+
+  defp unless_reason(:seen, _notifier, _data, _recipient, notification),
+    do: notification.seen_at && Explain.seen(notification.seen_at)
+
+  defp unless_reason(condition, notifier, data, recipient, _notification),
+    do: call(notifier, condition, data, recipient) && "unless #{name(condition)}"
+
+  defp if_reason(condition, notifier, data, recipient),
+    do: !call(notifier, condition, data, recipient) && "if #{name(condition)} was false"
 
   defp call(notifier, name, data, recipient) when is_atom(name),
     do: apply(notifier, name, [data, recipient])

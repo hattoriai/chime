@@ -119,7 +119,7 @@ defmodule Chime.Notifier do
   """
   @callback data(params()) :: map()
 
-  @doc "Who did it: `%{\"id\" => ..., \"name\" => ...}`, or nil (nil)."
+  @doc ~s|Who did it: `%{"id" => ..., "name" => ...}`, or nil (nil).|
   @callback actor(params()) :: map() | nil
 
   @doc """
@@ -183,6 +183,21 @@ defmodule Chime.Notifier do
   defmacro __before_compile__(env) do
     deliveries = env.module |> Module.get_attribute(:chime_deliveries) |> Enum.reverse()
     config = Module.get_attribute(env.module, :chime_config)
+
+    check(env, deliveries)
+
+    quote do
+      @doc false
+      def __chime__(:deliveries), do: unquote(Macro.escape(deliveries))
+      def __chime__(:category), do: unquote(config.category)
+      def __chime__(:kind), do: unquote(config.kind)
+      def __chime__(:required), do: unquote(config.required)
+      def __chime__(:group_window), do: unquote(config.group_window)
+    end
+  end
+
+  # The checks of a notifier's declarations, when it compiles.
+  defp check(env, deliveries) do
     channels = Enum.map(deliveries, & &1.channel)
 
     if deliveries == [] do
@@ -192,11 +207,12 @@ defmodule Chime.Notifier do
       )
     end
 
-    duplicates = channels -- Enum.uniq(channels)
+    case channels -- Enum.uniq(channels) do
+      [] ->
+        :ok
 
-    if duplicates != [] do
-      raise ArgumentError,
-            "#{inspect(env.module)} declares the channel #{inspect(hd(duplicates))} twice"
+      [twice | _] ->
+        raise ArgumentError, "#{inspect(env.module)} declares the channel #{inspect(twice)} twice"
     end
 
     for {channel, fun, arity} <- [{"feed", :feed, 2}, {"email", :email, 3}],
@@ -215,15 +231,6 @@ defmodule Chime.Notifier do
       raise ArgumentError,
             "#{inspect(env.module)} delivers by #{delivery.channel} with a condition " <>
               "#{inspect(name)}, but defines no #{name}/2"
-    end
-
-    quote do
-      @doc false
-      def __chime__(:deliveries), do: unquote(Macro.escape(deliveries))
-      def __chime__(:category), do: unquote(config.category)
-      def __chime__(:kind), do: unquote(config.kind)
-      def __chime__(:required), do: unquote(config.required)
-      def __chime__(:group_window), do: unquote(config.group_window)
     end
   end
 

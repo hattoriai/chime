@@ -76,11 +76,7 @@ defmodule Chime.Notify do
     case first_batch do
       {:ok, counts} ->
         Fanout.notified(config, counts)
-
-        for ids <- rest do
-          {:ok, counts} = config.repo.transaction(fn -> batch(plan, ids) end)
-          Fanout.notified(config, counts)
-        end
+        Enum.each(rest, &rest_batch(plan, &1))
 
         :telemetry.execute([:chime, :notify], %{recipients: length(ids)}, %{
           notifier: notifier,
@@ -92,6 +88,11 @@ defmodule Chime.Notify do
       {:error, :duplicate} ->
         {:error, :duplicate, config.repo.get_by!(Event, [key: opts[:key]], prefix: config.prefix)}
     end
+  end
+
+  defp rest_batch(%{config: config} = plan, ids) do
+    {:ok, counts} = config.repo.transaction(fn -> batch(plan, ids) end)
+    Fanout.notified(config, counts)
   end
 
   defp check_channel(_config, _notifier, "feed"), do: :ok

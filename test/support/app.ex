@@ -67,8 +67,8 @@ defmodule ChimeTest.Telegram do
       chat ->
         text = Chime.Message.render(message)
 
-        if pid = opts[:pid] || Process.whereis(:chime_test),
-          do: send(pid, {:telegram, chat, text})
+        pid = opts[:pid] || Process.whereis(:chime_test)
+        if pid, do: send(pid, {:telegram, chat, text})
 
         {:ok, "tg-#{chat}"}
     end

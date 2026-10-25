@@ -33,6 +33,8 @@ defmodule Chime.Router do
   `Chime.Components` go in them.
   """
 
+  alias Chime.Router.Unsubscribe
+
   use PhoenixMountable,
     otp_app: :chime,
     macro: :chime_api,
@@ -74,8 +76,8 @@ defmodule Chime.Router do
   """
   defmacro chime_unsubscribe(path, opts \\ []) do
     quote do
-      require Chime.Router.Unsubscribe
-      Chime.Router.Unsubscribe.chime_unsubscribe(unquote(path), unquote(opts))
+      require unquote(Unsubscribe)
+      unquote(Unsubscribe).chime_unsubscribe(unquote(path), unquote(opts))
     end
   end
 end

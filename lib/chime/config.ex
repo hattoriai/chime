@@ -252,23 +252,7 @@ defmodule Chime.Config do
   defp categories(categories) when is_list(categories) and categories != [] do
     Enum.map(categories, fn
       {key, opts} when is_atom(key) and is_list(opts) ->
-        key = Atom.to_string(key)
-        defaults = Keyword.get(opts, :defaults, [])
-
-        unless Keyword.keyword?(defaults) and Enum.all?(defaults, fn {_, s} -> s in @settings end) do
-          raise ArgumentError,
-                ":defaults of the category #{inspect(key)} must be a keyword list of a channel " <>
-                  "and :on, :off, :daily or :weekly, got: #{inspect(defaults)}"
-        end
-
-        %{
-          key: key,
-          label: Keyword.get(opts, :label, label(key)),
-          description: opts[:description],
-          required: Keyword.get(opts, :required, false) == true,
-          defaults:
-            Map.new(defaults, fn {channel, s} -> {Atom.to_string(channel), Atom.to_string(s)} end)
-        }
+        category_spec(Atom.to_string(key), opts)
 
       other ->
         raise ArgumentError,
@@ -279,6 +263,25 @@ defmodule Chime.Config do
 
   defp categories(other) do
     raise ArgumentError, ":categories must be a keyword list, got: #{inspect(other)}"
+  end
+
+  defp category_spec(key, opts) do
+    defaults = Keyword.get(opts, :defaults, [])
+
+    unless Keyword.keyword?(defaults) and Enum.all?(defaults, fn {_, s} -> s in @settings end) do
+      raise ArgumentError,
+            ":defaults of the category #{inspect(key)} must be a keyword list of a channel " <>
+              "and :on, :off, :daily or :weekly, got: #{inspect(defaults)}"
+    end
+
+    %{
+      key: key,
+      label: Keyword.get(opts, :label, label(key)),
+      description: opts[:description],
+      required: Keyword.get(opts, :required, false) == true,
+      defaults:
+        Map.new(defaults, fn {channel, s} -> {Atom.to_string(channel), Atom.to_string(s)} end)
+    }
   end
 
   defp channels(channels) when is_list(channels) do

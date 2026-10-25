@@ -57,9 +57,11 @@ defmodule Chime.Counts do
         counted
 
       empty ->
+        zeros = Enum.map(empty, &%{recipient: &1, unseen: 0, unread: 0, updated_at: now})
+
         config.repo.insert_all(
           Count,
-          Enum.map(empty, &%{recipient: &1, unseen: 0, unread: 0, updated_at: now}),
+          zeros,
           on_conflict: {:replace, [:unseen, :unread, :updated_at]},
           conflict_target: :recipient,
           prefix: config.prefix

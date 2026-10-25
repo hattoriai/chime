@@ -186,12 +186,7 @@ defmodule Chime.API do
 
     result =
       config.repo.transaction(fn ->
-        Enum.each(changes, fn {category, channel, setting} ->
-          case Preferences.put(config, recipient, category, channel, setting) do
-            :ok -> :ok
-            {:error, code} -> config.repo.rollback({code, category, channel})
-          end
-        end)
+        Enum.each(changes, &put_preference(config, recipient, &1))
       end)
 
     case result do
@@ -241,6 +236,14 @@ defmodule Chime.API do
   defp continue(conn, {:error, _closed}), do: conn
 
   defp event(conn, name, data), do: chunk(conn, "event: #{name}\ndata: #{JSON.encode!(data)}\n\n")
+
+  # A change of the preferences, or the transaction's rollback.
+  defp put_preference(config, recipient, {category, channel, setting}) do
+    case Preferences.put(config, recipient, category, channel, setting) do
+      :ok -> :ok
+      {:error, code} -> config.repo.rollback({code, category, channel})
+    end
+  end
 
   defp preferences_json(config, recipient) do
     %{

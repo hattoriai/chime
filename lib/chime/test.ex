@@ -78,8 +78,7 @@ defmodule Chime.Test do
 
     to
     |> all()
-    |> Enum.filter(&(&1.event.notifier == name))
-    |> Enum.filter(fn n -> subset?(opts[:data], n.event.data) end)
+    |> Enum.filter(&(&1.event.notifier == name and subset?(opts[:data], &1.event.data)))
   end
 
   defp subset?(nil, _data), do: true
