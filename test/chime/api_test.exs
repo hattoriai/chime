@@ -123,16 +123,38 @@ defmodule Chime.APITest do
                |> get("/api/notifications/counts")
                |> json_response(200)
 
-      assert %{"unread" => 1} =
+      # In the address, only for the stream.
+      assert %{"error" => "unauthorized"} =
                build_conn()
                |> get("/api/notifications/counts?token=#{token}")
-               |> json_response(200)
+               |> json_response(401)
+
+      task = Task.async(fn -> get(build_conn(), "/api/notifications/stream?token=#{token}") end)
+      Process.sleep(100)
+      send(task.pid, {Chime.API, :close})
+      assert %{status: 200, resp_body: "event: counts\ndata: " <> _} = Task.await(task)
 
       assert %{"error" => "unauthorized"} =
                build_conn()
                |> put_req_header("authorization", "Bearer nope")
                |> get("/api/notifications/counts")
                |> json_response(401)
+    end
+
+    test "a malformed request is a 4xx, not a crash", %{conn: conn} do
+      conn = as(conn, "user:1")
+
+      assert %{"notifications" => []} =
+               conn |> get("/api/notifications?limit[]=1") |> json_response(200)
+
+      for body <- [%{preferences: "x"}, %{preferences: %{comments: %{email: %{a: 1}}}}] do
+        response =
+          conn
+          |> put_req_header("content-type", "application/json")
+          |> put("/api/notifications/preferences", JSON.encode!(body))
+
+        assert response.status in [200, 422]
+      end
     end
 
     test "the stream: the counts, then the news", %{conn: conn} do

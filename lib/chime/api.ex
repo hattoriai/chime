@@ -13,8 +13,10 @@ defmodule Chime.API do
   signed in (a session, a bearer token of the app's): the resolver reads
   the person from the conn (`c:Chime.Resolver.resolve_recipient/1`). A
   request with no person is a 401. A request may instead carry a token of
-  `Chime.Token`, as `Bearer <token>` or `?token=`: for an `EventSource`,
-  which cannot send headers, and pages on another origin.
+  `Chime.Token`, as `Bearer <token>`, for pages on another origin; and
+  `GET /stream` takes it as `?token=` too, as an `EventSource` cannot send
+  headers. Elsewhere a token in the address is not read: it would stay in
+  logs for its day.
 
   ## The routes
 
@@ -104,7 +106,11 @@ defmodule Chime.API do
   # The person of a token of Chime's when the request has one, else the
   # resolver's (the bearer may be the app's own token).
   defp reader(conn, config) do
-    token = bearer(conn) || conn.query_params["token"]
+    # A token in the address only for the stream, which an EventSource
+    # opens with no headers: elsewhere it would stay in logs for a day.
+    token =
+      bearer(conn) || (conn.path_info |> List.last() == "stream" && conn.query_params["token"])
+
     max_age = conn.assigns.mount.options[:token_max_age] || 86_400
 
     case token && Token.verify(token, max_age: max_age) do
@@ -179,10 +185,12 @@ defmodule Chime.API do
   defp handle(:put_preferences, conn, config, recipient) do
     {body, conn} = body(conn)
 
+    preferences = if is_map(body["preferences"]), do: body["preferences"], else: %{}
+
     changes =
-      for {category, settings} when is_map(settings) <- Map.get(body, "preferences") || %{},
+      for {category, settings} when is_map(settings) <- preferences,
           {channel, setting} <- settings,
-          do: {to_string(category), to_string(channel), to_string(setting)}
+          do: {category, channel, if(is_binary(setting), do: setting, else: "")}
 
     result =
       config.repo.transaction(fn ->
@@ -284,6 +292,8 @@ defmodule Chime.API do
       _ -> %{}
     end
   end
+
+  defp parse_int(string, default) when not is_binary(string), do: default
 
   defp parse_int(string, default) do
     case Integer.parse(string) do

@@ -7,7 +7,8 @@ defmodule Chime.Notification do
     * `:event` - the latest event of it; `:kind` and `:category` are its.
     * `:count` - how many events it holds: 1, or more when the events of a
       group joined it ("Ana and 4 others commented"); `:actors` - who did
-      them, the latest first, up to 5 (`%{"id", "name"}`).
+      them, the latest first, up to 20 (`%{"id", "name"}`);
+      `:actor_count` - how many different people did them.
     * `:in_feed` - whether the feed shows it: false when the person turned
       the feed off for the category, while other channels still go.
     * `:seen_at` - when the person saw it in the feed (the bell's dot);
@@ -29,6 +30,7 @@ defmodule Chime.Notification do
     field :grouped_until, :utc_datetime_usec
     field :count, :integer, default: 1
     field :actors, {:array, :map}, default: []
+    field :actor_count, :integer, default: 0
     field :in_feed, :boolean, default: true
     field :seen_at, :utc_datetime_usec
     field :read_at, :utc_datetime_usec

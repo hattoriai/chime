@@ -34,7 +34,7 @@ defmodule Chime.ExplainTest do
       {:ok, _} = comment!(ana, author: "Rui")
       {:ok, _} = comment!(ana, author: "Kenji")
       [n] = Chime.feed("user:1")
-      assert explain(n) =~ ~r/feed\s+grouped\s+2 events of story:Tokyo/
+      assert explain(n) =~ ~r/feed\s+grouped\s+2 events of new_comment:story:Tokyo/
       assert explain(n) =~ ~r/email\s+scheduled\s+waits until/
 
       :ok = Chime.put_preference("user:1", :comments, :email, :weekly)

@@ -150,3 +150,39 @@ defmodule ChimeTest.DigestEmail do
   def email(_recipient, items, period),
     do: Swoosh.Email.new(subject: "#{length(items)} #{period}", text_body: "x")
 end
+
+defmodule ChimeTest.Liked do
+  @moduledoc "A notifier of the tests whose groups share NewComment's keys."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+
+  @impl true
+  def recipients(%{to: to}), do: to
+
+  @impl true
+  def data(%{story: story}), do: %{"story" => story}
+
+  @impl true
+  def actor(%{author: author}), do: %{"id" => author, "name" => author}
+
+  @impl true
+  def group(%{story: story}), do: "story:#{story}"
+
+  @impl true
+  def feed(data, notification),
+    do: %{title: "#{Chime.actors(notification)} liked #{data["story"]}"}
+end
+
+defmodule ChimeTest.Raises do
+  @moduledoc "A notifier of the tests whose email raises."
+  use Chime.Notifier, category: :comments
+
+  deliver :email
+
+  @impl true
+  def group(_params), do: "always"
+
+  @impl true
+  def email(_data, _recipient, _notification), do: raise("boom")
+end

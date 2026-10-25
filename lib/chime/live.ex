@@ -132,9 +132,11 @@ defmodule Chime.Live do
   defp handle_event("chime:read_all", _params, socket), do: mark(socket, :read, :all)
 
   defp handle_event("chime:visit", %{"id" => id}, socket) do
+    # The item before the mark: under the unread filter, it then leaves the list.
+    item = Enum.find(socket.assigns.chime.items, &(&1.id == id))
     {:halt, socket} = mark(socket, :read, [id])
 
-    case Enum.find(socket.assigns.chime.items, &(&1.id == id)) do
+    case item do
       %{feed: %{url: "/" <> _ = path}} -> {:halt, push_navigate(socket, to: path)}
       %{feed: %{url: "http" <> _ = url}} -> {:halt, redirect(socket, external: url)}
       _ -> {:halt, socket}
@@ -183,7 +185,8 @@ defmodule Chime.Live do
     do: %{state | unseen: unseen, unread: unread}
 
   defp load(%State{} = state, limit) do
-    notifications = Chime.feed(state.recipient, limit: limit + 1, filter: state.filter)
+    notifications =
+      Feed.list(Config.get(), state.recipient, limit: limit + 1, filter: state.filter)
 
     items =
       notifications

@@ -39,6 +39,7 @@ defmodule Chime.Migrations.V1 do
       add :grouped_until, :utc_datetime_usec
       add :count, :integer, null: false, default: 1
       add :actors, {:array, :map}, null: false, default: []
+      add :actor_count, :integer, null: false, default: 0
       add :in_feed, :boolean, null: false, default: true
       add :seen_at, :utc_datetime_usec
       add :read_at, :utc_datetime_usec

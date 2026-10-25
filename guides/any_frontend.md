@@ -180,7 +180,7 @@ kept.
 `Chime.Token.sign/1` signs a person's id with the config's
 `:secret_key_base`, for a day. Make one on the server, for the person
 the page is for, never from an id the browser sends; the API takes it as
-`Bearer <token>` or `?token=`. `POST /token` makes one for the person of
+`Bearer <token>`, and `/stream` as `?token=` too. `POST /token` makes one for the person of
 the request. The mount's `:token_max_age` changes how long they last:
 
 ```elixir

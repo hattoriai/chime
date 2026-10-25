@@ -126,11 +126,15 @@ defmodule Chime.Feed do
       from(n in Notification, where: n.recipient == ^recipient)
       |> only(ids)
 
-    # Reading sees too, keeping the time of an earlier look.
-    if action == :read, do: update(config, query, :seen, now)
-    update(config, query, action, now)
+    {:ok, counts} =
+      config.repo.transaction(fn ->
+        Counts.lock(config, [recipient])
+        # Reading sees too, keeping the time of an earlier look.
+        if action == :read, do: update(config, query, :seen, now)
+        update(config, query, action, now)
+        Map.fetch!(Counts.refresh(config, [recipient]), recipient)
+      end)
 
-    counts = Map.fetch!(Counts.refresh(config, [recipient]), recipient)
     Fanout.updated(config, recipient, counts)
     counts
   end

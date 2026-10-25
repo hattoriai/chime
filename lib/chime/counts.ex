@@ -21,6 +21,30 @@ defmodule Chime.Counts do
   end
 
   @doc false
+  # Locks the counts of these people for the transaction, in the order of
+  # their ids, making the rows that are missing. On PostgreSQL, a second
+  # transaction for the same people waits here until the first commits,
+  # and its next statements see what the first wrote: the counts it then
+  # counts are whole. SQLite has one writer at a time.
+  @spec lock(Config.t(), [String.t()]) :: :ok
+  def lock(_config, []), do: :ok
+
+  def lock(%Config{} = config, ids) do
+    now = DateTime.utc_now()
+
+    rows =
+      ids |> Enum.sort() |> Enum.map(&%{recipient: &1, unseen: 0, unread: 0, updated_at: now})
+
+    config.repo.insert_all(Count, rows,
+      on_conflict: {:replace, [:updated_at]},
+      conflict_target: :recipient,
+      prefix: config.prefix
+    )
+
+    :ok
+  end
+
+  @doc false
   # Counts again the feed of these people, in one statement, and keeps the
   # counts: %{recipient => counts}. A person with no notification left in
   # the feed counts zero.

@@ -25,7 +25,7 @@ defmodule Chime.Explain do
 
   import Ecto.Query
 
-  alias Chime.{Config, Delivery, Notification}
+  alias Chime.{Config, Delivery, Event, Notification}
 
   @typedoc "A step of the log."
   @type step :: %{
@@ -57,8 +57,7 @@ defmodule Chime.Explain do
 
   defp steps(%Notification{} = n) do
     feed = [
-      {n.inserted_at, "feed", if(n.in_feed, do: "shown", else: "skipped"),
-       if(n.in_feed, do: nil, else: "the person turned off the feed for #{n.category}")},
+      feed_step(n),
       n.count > 1 && {n.updated_at, "feed", "grouped", "#{n.count} events of #{n.group_key}"},
       n.seen_at && {n.seen_at, "feed", "seen", nil},
       n.read_at && {n.read_at, "feed", "read", nil},
@@ -77,6 +76,23 @@ defmodule Chime.Explain do
       %{at: at, channel: channel, status: status, reason: reason}
     end)
     |> Enum.sort_by(& &1.at, DateTime)
+  end
+
+  # Whether it was in the feed: shown, turned off by the person, or not a
+  # notification of the feed at all.
+  defp feed_step(%Notification{in_feed: true} = n), do: {n.inserted_at, "feed", "shown", nil}
+
+  defp feed_step(%Notification{} = n) do
+    case Event.notifier(n.event) do
+      nil ->
+        {n.inserted_at, "feed", "skipped", nil}
+
+      notifier ->
+        if Enum.any?(notifier.__chime__(:deliveries), &(&1.channel == "feed")),
+          do:
+            {n.inserted_at, "feed", "skipped", "the person turned off the feed for #{n.category}"},
+          else: false
+    end
   end
 
   defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: nil}),

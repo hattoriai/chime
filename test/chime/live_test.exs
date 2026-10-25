@@ -74,6 +74,17 @@ defmodule Chime.LiveTest do
                "Nothing yet."
     end
 
+    test "a click under the unread filter still goes to the notification", %{conn: conn} do
+      {:ok, _} = comment!(person!(1))
+      {:ok, view, _html} = live(as(conn, "user:1"), "/bell")
+      view |> element(".chime-bell") |> render_click()
+      view |> element("button[phx-value-filter=unread]") |> render_click()
+      [%{id: id}] = Chime.feed("user:1")
+
+      assert {:error, {:live_redirect, %{to: "/stories/Tokyo"}}} =
+               view |> element("#chime-#{id} .chime-item-open") |> render_click()
+    end
+
     test "the preferences", %{conn: conn} do
       person!(1)
       {:ok, view, html} = live(as(conn, "user:1"), "/settings")

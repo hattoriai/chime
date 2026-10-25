@@ -29,12 +29,17 @@ defmodule Chime.Notify do
     Enum.each(deliveries, &check_channel(config, notifier, &1.channel))
 
     ids = recipient_ids(config, notifier, params, opts)
+    kind = notifier.__chime__(:kind)
+
+    # A group is a notifier's own: two notifiers with the same key do not
+    # join each other's notifications.
     group = notifier.group(params)
+    group = group && "#{kind}:#{group}"
 
     event = %{
       id: Ecto.UUID.generate(),
       notifier: inspect(notifier),
-      kind: notifier.__chime__(:kind),
+      kind: kind,
       category: category.key,
       data: notifier.data(params),
       actor: notifier.actor(params),
@@ -146,6 +151,9 @@ defmodule Chime.Notify do
   defp batch(_plan, []), do: %{}
 
   defp batch(%{config: config} = plan, ids) do
+    # The people's counts locked first, so that what follows sees what
+    # other calls for the same people committed, and they wait for this.
+    Counts.lock(config, ids)
     kept = Preferences.stored(config, ids, plan.category.key)
 
     in_feed =
@@ -159,8 +167,7 @@ defmodule Chime.Notify do
     {new, joined} = notifications(plan, ids, in_feed)
     deliveries(plan, new, joined, kept)
 
-    feed_ids = for id <- ids, in_feed[id], do: id
-    Counts.refresh(config, feed_ids)
+    Counts.refresh(config, ids)
   end
 
   # The notifications of a batch: those of an open group take the event,
@@ -178,37 +185,48 @@ defmodule Chime.Notify do
       |> config.repo.all(prefix: config.prefix)
 
     joined = join_groups(plan, open, in_feed)
-    open_ids = MapSet.new(open, &elem(&1, 0))
-    {insert(plan, Enum.reject(ids, &MapSet.member?(open_ids, &1)), in_feed), joined}
+    joined_ids = MapSet.new(joined, &elem(&1, 0))
+    {insert(plan, Enum.reject(ids, &MapSet.member?(joined_ids, &1)), in_feed), joined}
   end
 
   # The event joins the open groups: one update for each list of actors,
   # which the notifications of a group most often share.
   defp join_groups(_plan, [], _in_feed), do: []
 
+  # A notification read or archived meanwhile is not joined (its update
+  # checks it is still open): the person gets a new one.
   defp join_groups(%{config: config, event: event, now: now}, open, in_feed) do
     open
     |> Enum.group_by(fn {recipient, _id, actors} -> {actors, in_feed[recipient]} end)
-    |> Enum.each(fn {{actors, feed?}, rows} ->
+    |> Enum.flat_map(fn {{actors, feed?}, rows} ->
       ids = Enum.map(rows, &elem(&1, 1))
+      new_actor = if new_actor?(actors, event.actor), do: 1, else: 0
 
-      from(n in Notification, where: n.id in ^ids)
-      |> config.repo.update_all(
-        [
-          set: [
-            event_id: event.id,
-            actors: add_actor(actors, event.actor),
-            in_feed: feed?,
-            seen_at: nil,
-            updated_at: now
+      {_n, joined} =
+        from(n in Notification, where: n.id in ^ids and n.grouping, select: {n.recipient, n.id})
+        |> config.repo.update_all(
+          [
+            set: [
+              event_id: event.id,
+              actors: add_actor(actors, event.actor),
+              in_feed: feed?,
+              seen_at: nil,
+              updated_at: now
+            ],
+            inc: [count: 1, actor_count: new_actor]
           ],
-          inc: [count: 1]
-        ],
-        prefix: config.prefix
-      )
-    end)
+          prefix: config.prefix
+        )
 
-    Enum.map(open, fn {recipient, id, _actors} -> {recipient, id} end)
+      joined
+    end)
+  end
+
+  defp new_actor?(_actors, nil), do: false
+
+  defp new_actor?(actors, actor) do
+    id = actor["id"] || actor[:id]
+    not Enum.any?(actors, &((&1["id"] || &1[:id]) == id))
   end
 
   defp add_actor(actors, nil), do: actors
@@ -237,6 +255,7 @@ defmodule Chime.Notify do
           grouped_until: until,
           count: 1,
           actors: if(event.actor, do: [event.actor], else: []),
+          actor_count: if(event.actor, do: 1, else: 0),
           in_feed: in_feed[id],
           inserted_at: now,
           updated_at: now
@@ -244,8 +263,8 @@ defmodule Chime.Notify do
       end)
 
     if grouping do
-      # A notification of the group made meanwhile, by another call, keeps
-      # its own: this event is not counted in it.
+      # The counts' lock keeps two calls for the same people apart, so an
+      # open group of theirs made meanwhile was seen: this is a safeguard.
       {_n, inserted} =
         config.repo.insert_all(Notification, rows,
           on_conflict: :nothing,

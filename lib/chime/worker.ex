@@ -14,14 +14,15 @@ defmodule Chime.Worker do
   def perform(%Oban.Job{args: %{"job" => "digest"}}) do
     config = Config.get()
     now = DateTime.utc_now()
-    Digest.run(config, now)
+    # The next first: a run that fails does not stop the ones after.
     Jobs.schedule(config.oban, "digest", Jobs.next_hour(now))
+    Digest.run(config, now)
   end
 
   def perform(%Oban.Job{args: %{"job" => "cleanup"}}) do
     config = Config.get()
     now = DateTime.utc_now()
-    Cleanup.run(config, now)
     Jobs.schedule(config.oban, "cleanup", DateTime.add(now, 1, :day))
+    Cleanup.run(config, now)
   end
 end

@@ -18,9 +18,29 @@ defmodule Chime.Deliver do
     query = from(d in Delivery, where: d.id == ^id, preload: [notification: :event])
 
     case config.repo.one(query, prefix: config.prefix) do
-      %Delivery{status: "scheduled"} = delivery -> decide(config, delivery, last?, now)
+      %Delivery{status: "scheduled"} = delivery -> try_decide(config, delivery, last?, now)
       _done -> :ok
     end
+  end
+
+  # A delivery that raises on its last attempt is failed, with the error,
+  # so that it does not wait for ever (and hold its group's place).
+  defp try_decide(config, delivery, last?, now) do
+    decide(config, delivery, last?, now)
+  rescue
+    error ->
+      if last? do
+        finish(
+          config,
+          %{delivery | attempts: delivery.attempts + 1},
+          "failed",
+          Exception.message(error),
+          nil,
+          now
+        )
+      end
+
+      reraise error, __STACKTRACE__
   end
 
   defp decide(config, %Delivery{notification: notification} = delivery, last?, now) do

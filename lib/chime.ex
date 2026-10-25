@@ -182,12 +182,14 @@ defmodule Chime do
   from `notification.actors`, the latest first.
   """
   @spec actors(Notification.t()) :: String.t()
-  def actors(%Notification{actors: actors}) do
+  def actors(%Notification{actors: actors} = notification) do
+    total = max(notification.actor_count, length(actors))
+
     case Enum.map(actors, &(&1["name"] || &1[:name])) do
       [] -> "Someone"
       [one] -> one
-      [one, two] -> "#{one} and #{two}"
-      [one | rest] -> "#{one} and #{length(rest)} others"
+      [one, two] when total == 2 -> "#{one} and #{two}"
+      [one | _] -> "#{one} and #{total - 1} others"
     end
   end
 
