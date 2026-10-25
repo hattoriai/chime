@@ -1,7 +1,7 @@
 # Channels
 
-A channel is a way to tell a person. Chime has two: the feed and email.
-Your app adds its own.
+A channel is a way to tell a person. Chime has the feed, email, and push
+(see [Push](push.md)). Your app adds its own.
 
 ## The feed
 

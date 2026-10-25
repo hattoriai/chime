@@ -292,6 +292,32 @@ defmodule Chime do
   end
 
   @doc """
+  Registers a device of a person, for the `:push` channel: `%{kind:
+  "web", token: endpoint, keys: %{"p256dh" => ..., "auth" => ...}}` for
+  a browser's subscription, `%{kind: "apns" | "fcm", token: token}` for a
+  phone's; and `:name`. A token registered before is the same device, now
+  of this person. Errors: `:unknown_kind`, `:invalid_token`,
+  `:invalid_subscription`.
+  """
+  @spec register_device(String.t(), map()) :: {:ok, Chime.Device.t()} | {:error, atom()}
+  def register_device(recipient, attrs),
+    do: Chime.Devices.register(Config.get(), recipient, attrs)
+
+  @doc "A person's devices, the latest first."
+  @spec devices(String.t()) :: [Chime.Device.t()]
+  def devices(recipient), do: Chime.Devices.list(Config.get(), recipient)
+
+  @doc "Turns a person's device on or off (`enabled:`), or names it (`name:`)."
+  @spec update_device(String.t(), Ecto.UUID.t(), keyword() | map()) ::
+          {:ok, Chime.Device.t()} | {:error, :not_found}
+  def update_device(recipient, id, changes),
+    do: Chime.Devices.update(Config.get(), recipient, id, Map.new(changes))
+
+  @doc "Removes a person's device."
+  @spec remove_device(String.t(), Ecto.UUID.t()) :: :ok | {:error, :not_found}
+  def remove_device(recipient, id), do: Chime.Devices.remove(Config.get(), recipient, id)
+
+  @doc """
   The address to unsubscribe a person from a category's emails, for the
   footer of a notifier's email; nil without `:mail_url` and
   `:secret_key_base` in the config.

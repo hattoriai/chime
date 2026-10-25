@@ -87,6 +87,20 @@ defmodule Chime.Config do
       comes then waits for the end. A person's own (`:quiet_hours` of
       `Chime.Recipient`) comes first. Required notifications go all the
       same (none).
+    * `:push` - the push services of the `:push` channel, each with its
+      keys (see the [Push](push.md) guide); the channel is there with one:
+        * `:web` - Web Push, for browsers: `:public_key` and `:private_key`,
+          the app's VAPID keys, URL-safe Base64 (`mix chime.gen.vapid`),
+          `:subject`, a `mailto:` or `https:` address of the app's, and
+          `:ttl`, how long a push waits for a browser that is off, in
+          seconds (one day).
+        * `:apns` - Apple's: `:key`, the `.p8` key (its text), `:key_id`,
+          `:team_id`, `:topic`, the app's bundle id, and `:env`,
+          `:production` or `:sandbox` (`:production`).
+        * `:fcm` - Firebase's: `:service_account`, its JSON (the text, or a
+          map), from Firebase's console.
+        * `:req_options` - options of the requests to the services, for
+          `Req` (`[]`).
     * `:keep_days` - how long a notification is kept, with its deliveries,
       after it came (`180`). `nil` keeps them for ever.
     * `:scheduler` - `false` starts nothing that runs by itself: no
@@ -108,6 +122,7 @@ defmodule Chime.Config do
     :url,
     :gettext,
     :quiet_hours,
+    :push,
     limits: %{},
     oban: %{name: Oban, queue: :default},
     categories: nil,
@@ -137,6 +152,7 @@ defmodule Chime.Config do
           url: String.t() | nil,
           gettext: module() | nil,
           quiet_hours: {0..23, 0..23} | nil,
+          push: map() | nil,
           limits: %{String.t() => {pos_integer(), pos_integer()}},
           oban: %{name: term(), queue: atom()},
           categories: [category()] | nil,
@@ -172,9 +188,10 @@ defmodule Chime.Config do
       gettext: opts[:gettext],
       quiet_hours: quiet_hours(opts[:quiet_hours]),
       limits: limits(Keyword.get(opts, :limits, [])),
+      push: push(opts[:push]),
       oban: oban(Keyword.get(opts, :oban, Oban)),
       categories: categories(opts[:categories]),
-      channels: channels(Keyword.get(opts, :channels, [])),
+      channels: channels(Keyword.get(opts, :channels, []), opts[:push]),
       digest: digest(Keyword.get(opts, :digest, [])),
       keep_days: keep_days(Keyword.get(opts, :keep_days, 180)),
       scheduler: scheduler(Keyword.get(opts, :scheduler, true))
@@ -305,9 +322,13 @@ defmodule Chime.Config do
     }
   end
 
-  defp channels(channels) when is_list(channels) do
-    Map.new(channels, fn
-      {name, _} when name in [:feed, :email] ->
+  defp channels(channels, push) when is_list(channels) do
+    # The :push channel, with the services of :push.
+    builtin = if push, do: %{"push" => {Chime.Channels.Push, []}}, else: %{}
+
+    channels
+    |> Map.new(fn
+      {name, _} when name in [:feed, :email] or (name == :push and push != nil) ->
         raise ArgumentError, "#{inspect(name)} is Chime's own channel: give yours another name"
 
       {name, module} when is_atom(name) and is_atom(module) ->
@@ -320,9 +341,10 @@ defmodule Chime.Config do
         raise ArgumentError,
               "each of :channels is a name and a module of Chime.Channel, got: #{inspect(other)}"
     end)
+    |> Map.merge(builtin)
   end
 
-  defp channels(other) do
+  defp channels(other, _push) do
     raise ArgumentError, ":channels must be a keyword list, got: #{inspect(other)}"
   end
 
@@ -371,6 +393,97 @@ defmodule Chime.Config do
   end
 
   @units %{second: 1, minute: 60, hour: 3600, day: 86_400}
+
+  defp push(nil), do: nil
+
+  defp push(opts) when is_list(opts) do
+    req = Keyword.get(opts, :req_options, [])
+
+    unless Code.ensure_loaded?(Req),
+      do: raise(ArgumentError, "the :push option needs the :req dependency")
+
+    services =
+      for {service, settings} <- Keyword.take(opts, [:web, :apns, :fcm]), into: %{} do
+        {service, push_service(service, settings, req)}
+      end
+
+    if services == %{}, do: raise(ArgumentError, ":push needs :web, :apns or :fcm")
+    services
+  end
+
+  defp push(other),
+    do: raise(ArgumentError, ":push must be a keyword list, got: #{inspect(other)}")
+
+  defp push_service(:web, opts, req) do
+    private = decode_key!(:private_key, opts[:private_key], 32)
+    public = decode_key!(:public_key, opts[:public_key], 65)
+    subject = opts[:subject]
+
+    unless is_binary(subject) and String.starts_with?(subject, ["mailto:", "https:"]) do
+      raise ArgumentError,
+            ":subject of :web of :push must be a mailto: or https: address of the app's"
+    end
+
+    %{
+      private_key: private,
+      public_key: Base.url_encode64(public, padding: false),
+      subject: subject,
+      ttl: Keyword.get(opts, :ttl, 86_400),
+      req_options: req
+    }
+  end
+
+  defp push_service(:apns, opts, req) do
+    for key <- [:key, :key_id, :team_id, :topic], !is_binary(opts[key]) do
+      raise ArgumentError, ":apns of :push needs #{inspect(key)}"
+    end
+
+    env = Keyword.get(opts, :env, :production)
+
+    unless env in [:production, :sandbox],
+      do: raise(ArgumentError, ":env of :apns must be :production or :sandbox")
+
+    %{
+      key: opts[:key],
+      key_id: opts[:key_id],
+      team_id: opts[:team_id],
+      topic: opts[:topic],
+      env: env,
+      req_options: req
+    }
+  end
+
+  defp push_service(:fcm, opts, req) do
+    account =
+      case opts[:service_account] do
+        json when is_binary(json) -> JSON.decode!(json)
+        %{} = map -> Map.new(map, fn {k, v} -> {to_string(k), v} end)
+        _ -> raise ArgumentError, ":fcm of :push needs :service_account, its JSON"
+      end
+
+    for key <- ["project_id", "client_email", "private_key"], !is_binary(account[key]) do
+      raise ArgumentError, "the :service_account of :fcm has no #{key}"
+    end
+
+    %{
+      project_id: account["project_id"],
+      client_email: account["client_email"],
+      private_key: account["private_key"],
+      token_uri: account["token_uri"] || "https://oauth2.googleapis.com/token",
+      req_options: req
+    }
+  end
+
+  defp decode_key!(name, text, size) do
+    case is_binary(text) && Base.url_decode64(text, padding: false) do
+      {:ok, <<_::binary-size(size)>> = key} ->
+        key
+
+      _ ->
+        raise ArgumentError,
+              "#{inspect(name)} of :web of :push must be a VAPID key, URL-safe Base64"
+    end
+  end
 
   defp limits(limits) when is_list(limits) do
     Map.new(limits, fn

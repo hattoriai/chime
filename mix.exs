@@ -64,6 +64,8 @@ defmodule Chime.MixProject do
       {:phoenix, if(@oldest, do: "~> 1.7.14", else: "~> 1.7.14 or ~> 1.8")},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_view, if(@oldest, do: "~> 1.1.0", else: "~> 1.1")},
+      # The :push channel's requests to Web Push, APNs and FCM.
+      {:req, "~> 0.5", optional: true},
       # The :email channel, with the app's own mailer.
       {:swoosh, "~> 1.17", optional: true},
       {:telemetry, "~> 1.0"}
@@ -83,6 +85,7 @@ defmodule Chime.MixProject do
         lib
         priv/static/chime.css
         priv/gettext/chime.pot
+        priv/static/chime-sw.js
         mix.exs
         .formatter.exs
         guides
@@ -105,6 +108,7 @@ defmodule Chime.MixProject do
         "guides/quickstart.md",
         "guides/notifiers.md",
         "guides/channels.md",
+        "guides/push.md",
         "guides/preferences.md",
         "guides/workspaces.md",
         "guides/explain.md",
@@ -121,6 +125,7 @@ defmodule Chime.MixProject do
           "guides/quickstart.md",
           "guides/notifiers.md",
           "guides/channels.md",
+          "guides/push.md",
           "guides/preferences.md",
           "guides/workspaces.md",
           "guides/explain.md",
@@ -148,6 +153,8 @@ defmodule Chime.MixProject do
           Chime.Channel,
           Chime.Message,
           Chime.Channels.Email,
+          Chime.Channels.Push,
+          Chime.Device,
           Chime.Delivery,
           Chime.Digest
         ],

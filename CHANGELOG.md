@@ -65,5 +65,12 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   notification when it is opened, then redirects; the email's
   `assigns.link`, and the digests' links, at `/open/:token` of
   `chime_mail`.
+- Push: the `:push` channel, to browsers by Web Push (RFC 8291 and
+  8292), Apple's devices by APNs and Android's by FCM, with the keys of
+  the config's `:push`; each person's devices (`chime_devices`, turned on
+  and off, forgotten when a service says they are gone), registered by
+  the JSON API (`/devices`, `/push`); the notifier's `push/3`; the group
+  as the tag that replaces a push on the device; `priv/static/chime-sw.js`;
+  `mix chime.gen.vapid`.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

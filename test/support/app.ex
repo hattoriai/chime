@@ -371,3 +371,23 @@ defmodule ChimeTest.Invited do
     )
   end
 end
+
+defmodule ChimeTest.Pushed do
+  @moduledoc "A notifier of the tests by push, with its own words."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+  deliver :push
+
+  @impl true
+  def data(%{text: text}), do: %{"text" => text}
+
+  @impl true
+  def group(_params), do: "thread"
+
+  @impl true
+  def feed(data, _notification), do: %{title: data["text"], url: "/thread"}
+
+  def push(data, _recipient, _notification),
+    do: %{title: "New: " <> data["text"], body: "Open it", url: "/thread", icon: "/icon.png"}
+end

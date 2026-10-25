@@ -16,6 +16,8 @@ and by channels of your own, as each person wants. It gives your app:
   comes back to the top, not five;
 * actions on a notification ("Accept", "Decline"), and links of emails
   that read it in the feed when they are opened;
+* push to browsers (Web Push), iPhones (APNs) and Android (FCM), each
+  person's devices kept, those gone forgotten;
 * email through your Swoosh mailer, with one-click unsubscribe, and
   channels of your own (Telegram, SMS, Slack, push) in one behaviour;
 * delays and fallbacks: in the feed now, by email in ten minutes unless
@@ -200,6 +202,7 @@ Chime.explain(notification_id) |> Chime.Explain.format() |> IO.puts()
 * [Quickstart](guides/quickstart.md): from the dependency to the first notification in the bell.
 * [Notifiers](guides/notifiers.md): recipients, data, groups, channels, delays and conditions.
 * [Channels](guides/channels.md): the feed, email, and channels of your own.
+* [Push](guides/push.md): browsers, iPhones and Android phones; the keys, devices, the service worker.
 * [Preferences](guides/preferences.md): categories, settings, required notifications, digests, unsubscribe links.
 * [Workspaces](guides/workspaces.md): teams, organisations, collectives: a feed, counts and preferences for each.
 * [The log](guides/explain.md): what Chime decided, and why.

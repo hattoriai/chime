@@ -108,6 +108,24 @@ defmodule Chime.Migrations.V1 do
              prefix: ctx.prefix
            )
 
+    # Each person's devices, for the :push channel: a browser's Web Push
+    # subscription, or a phone's APNs or FCM token.
+    create table(:chime_devices, primary_key: false, prefix: ctx.prefix) do
+      add :id, :binary_id, primary_key: true
+      add :recipient, :string, size: 255, null: false
+      add :kind, :string, size: 16, null: false
+      add :token, :text, null: false
+      add :keys, :map
+      add :name, :string, size: 255
+      add :enabled, :boolean, null: false, default: true
+      add :last_used_at, :utc_datetime_usec
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create index(:chime_devices, [:recipient], prefix: ctx.prefix)
+    # A token is one device, of whoever registered it last.
+    create unique_index(:chime_devices, [:kind, :token], prefix: ctx.prefix)
+
     create table(:chime_preferences, primary_key: false, prefix: ctx.prefix) do
       add :recipient, :string, size: 255, primary_key: true
       # "" for every workspace, else the workspace's own setting.
@@ -130,6 +148,7 @@ defmodule Chime.Migrations.V1 do
 
   def down(ctx) do
     drop table(:chime_counts, prefix: ctx.prefix)
+    drop table(:chime_devices, prefix: ctx.prefix)
     drop table(:chime_preferences, prefix: ctx.prefix)
     drop table(:chime_deliveries, prefix: ctx.prefix)
     drop table(:chime_notifications, prefix: ctx.prefix)

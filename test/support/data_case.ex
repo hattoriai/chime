@@ -74,6 +74,10 @@ defmodule ChimeTest.DataCase do
 
   @doc "Changes the config of the test: the options over the tests' own."
   def reconfigure(%{repo: repo, oban: oban}, opts) do
+    for {key, _} <- :persistent_term.get(),
+        match?({Chime.Push.FCM, _}, key),
+        do: :persistent_term.erase(key)
+
     config = Chime.Config.new(Keyword.merge(config_opts(repo, oban), opts))
     Chime.Config.put(config)
     config

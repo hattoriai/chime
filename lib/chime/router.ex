@@ -63,6 +63,11 @@ defmodule Chime.Router do
     post "/:id/archive", Chime.API, :archive, as: :archive
     post "/:id/unarchive", Chime.API, :unarchive, as: :unarchive
     post "/:id/actions/:action", Chime.API, :act, as: :act
+    get "/push", Chime.API, :push, as: :push
+    get "/devices", Chime.API, :devices, as: :devices
+    post "/devices", Chime.API, :register_device, as: :register_device
+    patch "/devices/:device", Chime.API, :update_device, as: :update_device
+    delete "/devices/:device", Chime.API, :remove_device, as: :remove_device
   end
 
   @impl PhoenixMountable

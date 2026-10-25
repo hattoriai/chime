@@ -37,6 +37,18 @@ defmodule Chime.API do
       next, or null); a 404, or a 422 with `"unknown_action"`,
       `"already"` (an action was taken), or `"failed"` and the notifier's
       `reason`.
+    * `GET /push` - `{"vapidPublicKey": key, "services": ["web", ...]}`,
+      the app's public key for a browser's `pushManager.subscribe/1`.
+    * `GET /devices` - the person's devices: `{"devices": [{"id", "kind",
+      "name", "enabled", "lastUsedAt", "insertedAt"}]}`.
+    * `POST /devices` - registers one, with `{"kind": "web", "token":
+      subscription.endpoint, "keys": subscription.keys, "name": "..."}`, or
+      `{"kind": "apns" | "fcm", "token": "..."}`: a 201 with `{"device"}`,
+      or a 422 with `"unknown_kind"`, `"invalid_token"`,
+      `"invalid_subscription"`.
+    * `PATCH /devices/:id` - `{"enabled": false}` turns it off, and on;
+      `{"name": "..."}` names it.
+    * `DELETE /devices/:id` - removes it.
     * `GET /preferences` - the person's settings:
       `{"categories": [{"key", "label", "description", "required",
       "settings": {"feed": "on", "email": "daily"}}], "channels": [{"key":
@@ -225,6 +237,57 @@ defmodule Chime.API do
     end
   end
 
+  defp handle(:push, conn, config, _recipient) do
+    web = config.push && config.push[:web]
+
+    json(conn, 200, %{
+      vapidPublicKey: web && web.public_key,
+      services: Map.keys(config.push || %{})
+    })
+  end
+
+  defp handle(:devices, conn, config, recipient),
+    do:
+      json(conn, 200, %{devices: Enum.map(Chime.Devices.list(config, recipient), &device_json/1)})
+
+  defp handle(:register_device, conn, config, recipient) do
+    {body, conn} = body(conn)
+
+    case Chime.Devices.register(
+           config,
+           recipient,
+           Map.take(body, ["kind", "token", "keys", "name"])
+         ) do
+      {:ok, device} -> json(conn, 201, %{device: device_json(device)})
+      {:error, code} -> json(conn, 422, %{error: Atom.to_string(code)})
+    end
+  end
+
+  defp handle(:update_device, conn, config, recipient) do
+    {body, conn} = body(conn)
+
+    changes =
+      for {"enabled", v} when is_boolean(v) <- body, into: %{}, do: {:enabled, v}
+
+    changes =
+      case body["name"] do
+        name when is_binary(name) -> Map.put(changes, :name, String.slice(name, 0, 255))
+        _ -> changes
+      end
+
+    case Chime.Devices.update(config, recipient, conn.path_params["device"], changes) do
+      {:ok, device} -> json(conn, 200, %{device: device_json(device)})
+      {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
+    end
+  end
+
+  defp handle(:remove_device, conn, config, recipient) do
+    case Chime.Devices.remove(config, recipient, conn.path_params["device"]) do
+      :ok -> json(conn, 200, %{removed: true})
+      {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
+    end
+  end
+
   defp handle(:preferences, conn, config, recipient),
     do: json(conn, 200, preferences_json(conn, config, recipient))
 
@@ -290,6 +353,17 @@ defmodule Chime.API do
   defp continue(conn, {:error, _closed}), do: conn
 
   defp event(conn, name, data), do: chunk(conn, "event: #{name}\ndata: #{JSON.encode!(data)}\n\n")
+
+  defp device_json(device) do
+    %{
+      id: device.id,
+      kind: device.kind,
+      name: device.name,
+      enabled: device.enabled,
+      lastUsedAt: device.last_used_at,
+      insertedAt: device.inserted_at
+    }
+  end
 
   # A change of the preferences, or the transaction's rollback.
   defp put_preference(config, recipient, workspace, {category, channel, setting}) do

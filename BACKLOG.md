@@ -2,13 +2,6 @@
 
 Known gaps in Chime, each to become an issue.
 
-## Web Push and phones
-
-Push is a channel of the app's own today. Chime would keep each
-person's devices (a `chime_devices` table: Web Push subscriptions, APNs
-and FCM tokens), register them through the JSON API, send with
-`web_push` or `pushx`, and forget a device its service says is gone.
-
 ## Replies by email, with Letterbox
 
 An email of a notification with a `Reply-To` of a signed address
