@@ -9,6 +9,7 @@ defmodule Chime.Preference do
   @primary_key false
   schema "chime_preferences" do
     field :recipient, :string, primary_key: true
+    field :workspace, :string, primary_key: true, default: ""
     field :category, :string, primary_key: true
     field :channel, :string, primary_key: true
     field :setting, :string

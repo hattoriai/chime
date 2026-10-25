@@ -8,6 +8,7 @@ defmodule Chime.Event do
     * `:category` - the category of `Chime.Config` it is of.
     * `:data` - what the notifier's `data/1` kept of the params, as JSON:
       the feed and the emails are made from it when they are shown.
+    * `:workspace` - the workspace it happened in, or nil.
     * `:actor` - who did it (`%{"id" => ..., "name" => ...}`), or nil.
     * `:group_key` - the group its notifications join, or nil.
     * `:key` - the idempotency key it was given, or nil: a second call
@@ -23,6 +24,7 @@ defmodule Chime.Event do
     field :category, :string
     field :data, :map, default: %{}
     field :actor, :map
+    field :workspace, :string
     field :group_key, :string
     field :key, :string
     field :recipients, :integer, default: 0

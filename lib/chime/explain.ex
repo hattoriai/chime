@@ -112,7 +112,8 @@ defmodule Chime.Explain do
   def format(nil), do: "no such notification"
 
   def format(%{notification: n, steps: steps}) do
-    head = "#{time(n.inserted_at)}  #{n.kind}  to #{n.recipient}  (#{n.category})"
+    where = if n.workspace, do: "#{n.category}, in #{n.workspace}", else: n.category
+    head = "#{time(n.inserted_at)}  #{n.kind}  to #{n.recipient}  (#{where})"
 
     lines =
       Enum.map(steps, fn step ->

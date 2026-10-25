@@ -35,5 +35,10 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`:gettext`, `Chime.Messages`), from the template
   `priv/gettext/chime.pot`; deliveries and digests in each person's
   locale, the notifiers' own words with them.
+- Workspaces: a notification of a team or an organisation of the app's
+  (`workspace/1` of the notifier, or `:workspace`); the feed, the counts,
+  the marks and the preferences of a workspace; the resolver's
+  `resolve_workspace/1` for `Chime.Live` and the JSON API, which also
+  takes `?workspace=`.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

@@ -31,6 +31,7 @@ JSON of a notification.
 | Route | |
 | --- | --- |
 | `GET /` | the feed: `notifications`, `more`, `unseen`, `unread`; `?before=<id>`, `?limit=`, `?filter=unread\|archived\|all` |
+| any | `?workspace=`: the routes are that workspace's, as the resolver's `resolve_workspace/1` makes them |
 | `GET /counts` | `{"unseen": n, "unread": n}` |
 | `POST /seen` | the dot goes |
 | `POST /read` | all read |

@@ -46,6 +46,14 @@ defmodule ChimeTest.Resolver do
   end
 
   def resolve_recipient(%{assigns: assigns}), do: assigns[:current_reader]
+
+  @impl true
+  def resolve_workspace(%Plug.Conn{} = conn) do
+    conn = Plug.Conn.fetch_session(conn)
+    Plug.Conn.get_session(conn, "workspace")
+  end
+
+  def resolve_workspace(%{assigns: assigns}), do: assigns[:current_workspace]
 end
 
 defmodule ChimeTest.Telegram do
@@ -185,4 +193,17 @@ defmodule ChimeTest.Raises do
 
   @impl true
   def email(_data, _recipient, _notification), do: raise("boom")
+end
+
+defmodule ChimeTest.InTeam do
+  @moduledoc "A notifier of the tests whose workspace is the params' team."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+
+  @impl true
+  def workspace(%{team: team}), do: "team:#{team}"
+
+  @impl true
+  def feed(_data, _notification), do: %{title: "In a team"}
 end

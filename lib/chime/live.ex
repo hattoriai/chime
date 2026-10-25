@@ -47,7 +47,9 @@ defmodule Chime.Live do
     The `@chime` assign:
 
       * `:recipient` - the person's id, or nil for nobody;
-      * `:unseen` and `:unread` - their counts;
+      * `:workspace` - the workspace of the page, from the resolver's
+        `resolve_workspace/1`, or nil for the whole feed;
+      * `:unseen` and `:unread` - their counts, of the workspace with one;
       * `:open` - whether the panel is open; `:items` - its notifications,
         each `%{id:, notification:, feed:}`, the feed as the notifier
         renders it; `:more` - whether there are more; `:filter` -
@@ -57,6 +59,7 @@ defmodule Chime.Live do
 
     @type t :: %__MODULE__{
             recipient: String.t() | nil,
+            workspace: String.t() | nil,
             unseen: non_neg_integer(),
             unread: non_neg_integer(),
             open: boolean(),
@@ -67,6 +70,7 @@ defmodule Chime.Live do
           }
 
     defstruct recipient: nil,
+              workspace: nil,
               unseen: 0,
               unread: 0,
               open: false,
@@ -82,7 +86,12 @@ defmodule Chime.Live do
   def on_mount(opts, _params, _session, socket) when is_list(opts) do
     config = Config.get()
     recipient = Resolver.reader(config.resolver, socket)
-    state = %State{recipient: recipient, limit: Keyword.get(opts, :limit, 10)}
+
+    state = %State{
+      recipient: recipient,
+      workspace: recipient && Resolver.workspace(config.resolver, socket),
+      limit: Keyword.get(opts, :limit, 10)
+    }
 
     cond do
       recipient == nil ->
@@ -96,10 +105,20 @@ defmodule Chime.Live do
           |> attach_hook(:chime_events, :handle_event, &handle_event/3)
           |> attach_hook(:chime_info, :handle_info, &handle_info/2)
 
-        {:cont, assign(socket, :chime, with_counts(state, Counts.get(config, recipient)))}
+        {:cont,
+         assign(
+           socket,
+           :chime,
+           with_counts(state, Counts.get(config, recipient, state.workspace))
+         )}
 
       true ->
-        {:cont, assign(socket, :chime, with_counts(state, Counts.get(config, recipient)))}
+        {:cont,
+         assign(
+           socket,
+           :chime,
+           with_counts(state, Counts.get(config, recipient, state.workspace))
+         )}
     end
   end
 
@@ -111,7 +130,7 @@ defmodule Chime.Live do
 
   defp handle_event("chime:open", _params, socket) do
     update(socket, fn state ->
-      counts = Chime.mark_seen(state.recipient)
+      counts = Chime.mark_seen(state.recipient, workspace: state.workspace)
       state |> with_counts(counts) |> Map.put(:open, true) |> load(state.limit)
     end)
   end
@@ -151,7 +170,7 @@ defmodule Chime.Live do
     state = socket.assigns.chime
 
     if state.open do
-      counts = Chime.mark_seen(state.recipient)
+      counts = Chime.mark_seen(state.recipient, workspace: state.workspace)
 
       {:halt,
        assign(
@@ -174,19 +193,28 @@ defmodule Chime.Live do
 
   defp mark(socket, action, ids) do
     update(socket, fn state ->
-      counts = Feed.mark(Config.get(), state.recipient, action, ids)
+      counts = Feed.mark(Config.get(), state.recipient, action, ids, state.workspace)
       state |> with_counts(counts) |> load(max(length(state.items), state.limit))
     end)
   end
 
   defp update(socket, fun), do: {:halt, assign(socket, :chime, fun.(socket.assigns.chime))}
 
+  # The counts of the page's workspace, from all of a person's (PubSub,
+  # Feed.mark/5), or as they are.
+  defp with_counts(state, %{workspaces: _} = all),
+    do: with_counts(state, Counts.scope(all, state.workspace))
+
   defp with_counts(state, %{unseen: unseen, unread: unread}),
     do: %{state | unseen: unseen, unread: unread}
 
   defp load(%State{} = state, limit) do
     notifications =
-      Feed.list(Config.get(), state.recipient, limit: limit + 1, filter: state.filter)
+      Feed.list(Config.get(), state.recipient,
+        limit: limit + 1,
+        filter: state.filter,
+        workspace: state.workspace
+      )
 
     items =
       notifications

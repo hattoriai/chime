@@ -31,7 +31,8 @@ defmodule Chime do
     * `{Chime, :updated, counts}` - they saw, read or archived
       notifications, in another tab or on another device.
 
-  `counts` is `%{unseen: n, unread: n}`. `Chime.Live` and the JSON API's
+  `counts` is `%{unseen: n, unread: n, workspaces: %{id => %{unseen: n,
+  unread: n}}}`: the whole feed's, and each workspace's. `Chime.Live` and the JSON API's
   stream are subscribers.
   """
 
@@ -75,6 +76,8 @@ defmodule Chime do
 
     * `:to` - the people, instead of the notifier's `recipients/1`: the
       app's users, `Chime.Recipient`s or ids.
+    * `:workspace` - the workspace it happens in, instead of the
+      notifier's `workspace/1` (see the [Workspaces](workspaces.md) guide).
     * `:key` - an idempotency key: a second call with the same key does
       nothing, and returns `{:error, :duplicate, event}`. Give one when
       the call may run twice (a retried job): `"comment:#{comment.id}"`.
@@ -99,6 +102,7 @@ defmodule Chime do
     * `:before` - the id of a notification: the page after it.
     * `:filter` - `:inbox`, those not archived (the default), `:unread`,
       `:archived` or `:all`.
+    * `:workspace` - only the notifications of a workspace.
   """
   @spec feed(String.t(), keyword()) :: [Notification.t()]
   def feed(recipient, opts \\ []) when is_binary(recipient) do
@@ -108,54 +112,75 @@ defmodule Chime do
 
   @doc """
   A person's counts: `%{unseen: n, unread: n}`, of the notifications of
-  their feed not archived. One row, kept as notifications come and go.
+  their feed not archived, or of a workspace's (`workspace: id`). One row,
+  kept as notifications come and go.
   """
-  @spec counts(String.t()) :: counts()
-  def counts(recipient) when is_binary(recipient), do: Counts.get(Config.get(), recipient)
+  @spec counts(String.t(), keyword()) :: counts()
+  def counts(recipient, opts \\ []) when is_binary(recipient),
+    do: Counts.get(Config.get(), recipient, opts[:workspace])
 
-  @doc "Marks a person's feed as seen: the bell's dot goes. Returns the counts."
-  @spec mark_seen(String.t()) :: counts()
-  def mark_seen(recipient), do: Feed.mark(Config.get(), recipient, :seen, :all)
+  @doc """
+  Marks a person's feed as seen: the bell's dot goes. Option `:workspace`,
+  only a workspace's. Returns the counts, of the workspace with one.
+  """
+  @spec mark_seen(String.t(), keyword()) :: counts()
+  def mark_seen(recipient, opts \\ []), do: mark(recipient, :seen, :all, opts)
 
   @doc """
   Marks notifications of a person as read (and seen): a list of ids, or
-  `:all`. Returns the counts.
+  `:all`. Option `:workspace`. Returns the counts.
   """
-  @spec mark_read(String.t(), [String.t()] | :all) :: counts()
-  def mark_read(recipient, ids), do: Feed.mark(Config.get(), recipient, :read, ids)
+  @spec mark_read(String.t(), [String.t()] | :all, keyword()) :: counts()
+  def mark_read(recipient, ids, opts \\ []), do: mark(recipient, :read, ids, opts)
 
   @doc "Marks notifications of a person as unread. Returns the counts."
-  @spec mark_unread(String.t(), [String.t()] | :all) :: counts()
-  def mark_unread(recipient, ids), do: Feed.mark(Config.get(), recipient, :unread, ids)
+  @spec mark_unread(String.t(), [String.t()] | :all, keyword()) :: counts()
+  def mark_unread(recipient, ids, opts \\ []), do: mark(recipient, :unread, ids, opts)
 
   @doc "Archives notifications of a person: out of the inbox. Returns the counts."
-  @spec archive(String.t(), [String.t()] | :all) :: counts()
-  def archive(recipient, ids), do: Feed.mark(Config.get(), recipient, :archive, ids)
+  @spec archive(String.t(), [String.t()] | :all, keyword()) :: counts()
+  def archive(recipient, ids, opts \\ []), do: mark(recipient, :archive, ids, opts)
 
   @doc "Brings archived notifications of a person back. Returns the counts."
-  @spec unarchive(String.t(), [String.t()] | :all) :: counts()
-  def unarchive(recipient, ids), do: Feed.mark(Config.get(), recipient, :unarchive, ids)
+  @spec unarchive(String.t(), [String.t()] | :all, keyword()) :: counts()
+  def unarchive(recipient, ids, opts \\ []), do: mark(recipient, :unarchive, ids, opts)
+
+  defp mark(recipient, action, ids, opts) do
+    Config.get()
+    |> Feed.mark(recipient, action, ids, opts[:workspace])
+    |> Counts.scope(opts[:workspace])
+  end
 
   @doc """
   A person's preferences: for each category of the config, its settings
-  by channel (`Chime.Preferences`).
+  by channel (`Chime.Preferences`). Option `:workspace`: the settings in a
+  workspace, its own where the person set them.
   """
-  @spec preferences(String.t()) :: [Preferences.t()]
-  def preferences(recipient), do: Preferences.for_recipient(Config.get(), recipient)
+  @spec preferences(String.t(), keyword()) :: [Preferences.t()]
+  def preferences(recipient, opts \\ []),
+    do: Preferences.for_recipient(Config.get(), recipient, opts[:workspace])
 
   @doc """
   Changes a person's setting of a channel for a category: `"on"`,
-  `"off"`, or for email `"daily"` or `"weekly"`. See `Chime.Preferences`.
+  `"off"`, or for email `"daily"` or `"weekly"`. Option `:workspace`: for
+  that workspace only, over the person's setting for all. See
+  `Chime.Preferences`.
   """
-  @spec put_preference(String.t(), String.t() | atom(), String.t() | atom(), String.t() | atom()) ::
-          :ok | {:error, atom()}
-  def put_preference(recipient, category, channel, setting) do
+  @spec put_preference(
+          String.t(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          keyword()
+        ) :: :ok | {:error, atom()}
+  def put_preference(recipient, category, channel, setting, opts \\ []) do
     Preferences.put(
       Config.get(),
       recipient,
       to_string(category),
       to_string(channel),
-      to_string(setting)
+      to_string(setting),
+      opts[:workspace] && to_string(opts[:workspace])
     )
   end
 

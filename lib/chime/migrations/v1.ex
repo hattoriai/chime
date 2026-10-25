@@ -13,6 +13,7 @@ defmodule Chime.Migrations.V1 do
       add :category, :string, size: 120, null: false
       add :data, :map, null: false
       add :actor, :map
+      add :workspace, :string, size: 255
       add :group_key, :string, size: 255
       add :key, :string, size: 255
       add :recipients, :integer, null: false, default: 0
@@ -33,6 +34,7 @@ defmodule Chime.Migrations.V1 do
 
       add :kind, :string, size: 120, null: false
       add :category, :string, size: 120, null: false
+      add :workspace, :string, size: 255
       add :group_key, :string, size: 255
       # Open to the events of its group, until grouped_until or a read.
       add :grouping, :boolean, null: false, default: false
@@ -49,6 +51,7 @@ defmodule Chime.Migrations.V1 do
 
     # The feed, newest first.
     create index(:chime_notifications, [:recipient, :updated_at], prefix: ctx.prefix)
+    create index(:chime_notifications, [:recipient, :workspace, :updated_at], prefix: ctx.prefix)
     create index(:chime_notifications, [:event_id], prefix: ctx.prefix)
     create index(:chime_notifications, [:inserted_at], prefix: ctx.prefix)
 
@@ -95,6 +98,8 @@ defmodule Chime.Migrations.V1 do
 
     create table(:chime_preferences, primary_key: false, prefix: ctx.prefix) do
       add :recipient, :string, size: 255, primary_key: true
+      # "" for every workspace, else the workspace's own setting.
+      add :workspace, :string, size: 255, primary_key: true, default: ""
       add :category, :string, size: 120, primary_key: true
       add :channel, :string, size: 64, primary_key: true
       add :setting, :string, size: 16, null: false
@@ -103,6 +108,8 @@ defmodule Chime.Migrations.V1 do
 
     create table(:chime_counts, primary_key: false, prefix: ctx.prefix) do
       add :recipient, :string, size: 255, primary_key: true
+      # "" for the whole feed, else a workspace's part of it.
+      add :workspace, :string, size: 255, primary_key: true, default: ""
       add :unseen, :integer, null: false, default: 0
       add :unread, :integer, null: false, default: 0
       add :updated_at, :utc_datetime_usec, null: false

@@ -32,6 +32,7 @@ defmodule Chime.Feed do
       preload: :event
     )
     |> filter(filter)
+    |> in_workspace(opts[:workspace])
     |> before(config, recipient, opts[:before])
     |> config.repo.all(prefix: config.prefix)
   end
@@ -40,6 +41,9 @@ defmodule Chime.Feed do
   defp filter(query, :unread), do: where(query, [n], is_nil(n.archived_at) and is_nil(n.read_at))
   defp filter(query, :archived), do: where(query, [n], not is_nil(n.archived_at))
   defp filter(query, :all), do: query
+
+  defp in_workspace(query, nil), do: query
+  defp in_workspace(query, workspace), do: where(query, [n], n.workspace == ^workspace)
 
   # The page after a notification: those older than it, in the feed's
   # order. An id the person does not have gives the first page.
@@ -116,15 +120,18 @@ defmodule Chime.Feed do
 
   @doc false
   # Marks what a person has in the feed: seen, read, unread, archived,
-  # unarchived, for these ids or :all. Their counts are counted again and
-  # told to their other pages. Returns the counts.
-  @spec mark(Config.t(), String.t(), atom(), [String.t()] | :all) :: Counts.counts()
-  def mark(%Config{} = config, recipient, action, ids) do
+  # unarchived, for these ids or :all, of a workspace or every one. Their
+  # counts are counted again and told to their other pages. Returns the
+  # counts, the whole feed's and each workspace's.
+  @spec mark(Config.t(), String.t(), atom(), [String.t()] | :all, String.t() | nil) ::
+          Counts.all()
+  def mark(%Config{} = config, recipient, action, ids, workspace \\ nil) do
     now = DateTime.utc_now()
 
     query =
       from(n in Notification, where: n.recipient == ^recipient)
       |> only(ids)
+      |> in_workspace(workspace)
 
     {:ok, counts} =
       config.repo.transaction(fn ->

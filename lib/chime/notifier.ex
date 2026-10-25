@@ -131,6 +131,15 @@ defmodule Chime.Notifier do
   """
   @callback group(params()) :: String.t() | nil
 
+  @doc """
+  The workspace it happens in: the id of a team, an organisation, a
+  collective of the app's, as a string, or nil (nil). Its notifications
+  are of that workspace: a feed, counts and preferences can be of one
+  workspace (see the [Workspaces](workspaces.md) guide). `Chime.notify/3`
+  with `:workspace` gives it instead.
+  """
+  @callback workspace(params()) :: String.t() | nil
+
   @doc "What the feed shows: `:title`, and `:body`, `:url` and `:icon`."
   @callback feed(data :: map(), Chime.Notification.t()) :: feed()
 
@@ -141,7 +150,13 @@ defmodule Chime.Notifier do
   """
   @callback email(data :: map(), Chime.Recipient.t(), Chime.Notification.t()) :: struct()
 
-  @optional_callbacks recipients: 1, data: 1, actor: 1, group: 1, feed: 2, email: 3
+  @optional_callbacks recipients: 1,
+                      data: 1,
+                      actor: 1,
+                      group: 1,
+                      workspace: 1,
+                      feed: 2,
+                      email: 3
 
   @units %{second: 1, minute: 60, hour: 3600, day: 86_400}
 
@@ -164,7 +179,10 @@ defmodule Chime.Notifier do
       @impl Chime.Notifier
       def group(_params), do: nil
 
-      defoverridable data: 1, actor: 1, group: 1
+      @impl Chime.Notifier
+      def workspace(_params), do: nil
+
+      defoverridable data: 1, actor: 1, group: 1, workspace: 1
 
       @before_compile Chime.Notifier
     end

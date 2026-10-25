@@ -21,6 +21,8 @@ and by channels of your own, as each person wants. It gives your app:
 * preferences, a setting for each category and channel, required
   categories that cannot be turned off, and daily and weekly digests in
   each person's time zone;
+* workspaces (teams, organisations), each with its feed, counts and
+  preferences;
 * a log of every decision, with its reason: why a person got an email,
   and why they did not;
 * the bell and the feed in your LiveViews, live over PubSub, across tabs;
@@ -197,6 +199,7 @@ Chime.explain(notification_id) |> Chime.Explain.format() |> IO.puts()
 * [Notifiers](guides/notifiers.md): recipients, data, groups, channels, delays and conditions.
 * [Channels](guides/channels.md): the feed, email, and channels of your own.
 * [Preferences](guides/preferences.md): categories, settings, required notifications, digests, unsubscribe links.
+* [Workspaces](guides/workspaces.md): teams, organisations, collectives: a feed, counts and preferences for each.
 * [The log](guides/explain.md): what Chime decided, and why.
 * [In LiveView](guides/live_view.md): the bell, the feed and the preferences.
 * [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, a React hook.

@@ -97,7 +97,7 @@ defmodule Chime.API do
     conn = fetch_query_params(conn)
 
     case reader(conn, config) do
-      {:ok, recipient} -> handle(action, conn, config, recipient)
+      {:ok, recipient} -> handle(action, workspace(conn, config), config, recipient)
       {:error, :expired} -> json(conn, 401, %{error: "token_expired"})
       {:error, _} -> json(conn, 401, %{error: "unauthorized"})
     end
@@ -119,6 +119,20 @@ defmodule Chime.API do
       _ -> resolve(conn, config)
     end
   end
+
+  # The workspace of the request: `?workspace=`, else the resolver's. A
+  # person has only their own notifications in any workspace.
+  defp workspace(conn, config) do
+    workspace =
+      case conn.query_params["workspace"] do
+        workspace when is_binary(workspace) and workspace != "" -> workspace
+        _ -> Resolver.workspace(config.resolver, conn)
+      end
+
+    assign(conn, :chime_workspace, workspace)
+  end
+
+  defp ws(conn), do: conn.assigns.chime_workspace
 
   defp resolve(conn, config) do
     case Resolver.reader(config.resolver, conn) do
@@ -145,12 +159,17 @@ defmodule Chime.API do
       end
 
     notifications =
-      Feed.list(config, recipient, limit: limit + 1, filter: filter, before: params["before"])
+      Feed.list(config, recipient,
+        limit: limit + 1,
+        filter: filter,
+        before: params["before"],
+        workspace: ws(conn)
+      )
 
     json(
       conn,
       200,
-      Map.merge(Counts.get(config, recipient), %{
+      Map.merge(Counts.get(config, recipient, ws(conn)), %{
         notifications: notifications |> Enum.take(limit) |> Enum.map(&Feed.json/1),
         more: length(notifications) > limit
       })
@@ -158,13 +177,13 @@ defmodule Chime.API do
   end
 
   defp handle(:counts, conn, config, recipient),
-    do: json(conn, 200, Counts.get(config, recipient))
+    do: json(conn, 200, Counts.get(config, recipient, ws(conn)))
 
   defp handle(:seen, conn, config, recipient),
-    do: json(conn, 200, Feed.mark(config, recipient, :seen, :all))
+    do: json(conn, 200, mark(conn, config, recipient, :seen, :all))
 
   defp handle(:read_all, conn, config, recipient),
-    do: json(conn, 200, Feed.mark(config, recipient, :read, :all))
+    do: json(conn, 200, mark(conn, config, recipient, :read, :all))
 
   defp handle(action, conn, config, recipient)
        when action in [:read, :unread, :archive, :unarchive] do
@@ -173,14 +192,14 @@ defmodule Chime.API do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Notification{} <-
            config.repo.get_by(Notification, [id: id, recipient: recipient], prefix: config.prefix) do
-      json(conn, 200, Feed.mark(config, recipient, action, [id]))
+      json(conn, 200, mark(conn, config, recipient, action, [id]))
     else
       _ -> json(conn, 404, %{error: "not_found"})
     end
   end
 
   defp handle(:preferences, conn, config, recipient),
-    do: json(conn, 200, preferences_json(config, recipient))
+    do: json(conn, 200, preferences_json(conn, config, recipient))
 
   defp handle(:put_preferences, conn, config, recipient) do
     {body, conn} = body(conn)
@@ -194,12 +213,12 @@ defmodule Chime.API do
 
     result =
       config.repo.transaction(fn ->
-        Enum.each(changes, &put_preference(config, recipient, &1))
+        Enum.each(changes, &put_preference(config, recipient, ws(conn), &1))
       end)
 
     case result do
       {:ok, _} ->
-        json(conn, 200, preferences_json(config, recipient))
+        json(conn, 200, preferences_json(conn, config, recipient))
 
       {:error, {code, category, channel}} ->
         json(conn, 422, %{error: Atom.to_string(code), category: category, channel: channel})
@@ -221,7 +240,7 @@ defmodule Chime.API do
       |> put_resp_header("x-accel-buffering", "no")
       |> send_chunked(200)
 
-    case event(conn, "counts", Counts.get(config, recipient)) do
+    case event(conn, "counts", Counts.get(config, recipient, ws(conn))) do
       {:ok, conn} -> stream(conn)
       {:error, _closed} -> conn
     end
@@ -231,7 +250,7 @@ defmodule Chime.API do
   defp stream(conn) do
     receive do
       {Chime, kind, counts} when kind in [:notified, :updated] ->
-        continue(conn, event(conn, Atom.to_string(kind), counts))
+        continue(conn, event(conn, Atom.to_string(kind), Counts.scope(counts, ws(conn))))
 
       {__MODULE__, :close} ->
         conn
@@ -246,17 +265,26 @@ defmodule Chime.API do
   defp event(conn, name, data), do: chunk(conn, "event: #{name}\ndata: #{JSON.encode!(data)}\n\n")
 
   # A change of the preferences, or the transaction's rollback.
-  defp put_preference(config, recipient, {category, channel, setting}) do
-    case Preferences.put(config, recipient, category, channel, setting) do
+  defp put_preference(config, recipient, workspace, {category, channel, setting}) do
+    case Preferences.put(config, recipient, category, channel, setting, workspace) do
       :ok -> :ok
       {:error, code} -> config.repo.rollback({code, category, channel})
     end
   end
 
-  defp preferences_json(config, recipient) do
+  defp mark(conn, config, recipient, action, ids) do
+    config
+    |> Feed.mark(recipient, action, ids, ws(conn))
+    |> Counts.scope(ws(conn))
+  end
+
+  defp preferences_json(conn, config, recipient) do
     %{
       categories:
-        Enum.map(Preferences.for_recipient(config, recipient), fn %{category: c, settings: s} ->
+        Enum.map(Preferences.for_recipient(config, recipient, ws(conn)), fn %{
+                                                                              category: c,
+                                                                              settings: s
+                                                                            } ->
           %{
             key: c.key,
             label: Messages.t(c.label),

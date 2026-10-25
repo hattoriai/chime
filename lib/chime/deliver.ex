@@ -100,7 +100,13 @@ defmodule Chime.Deliver do
   end
 
   defp preference(config, category, required?, delivery) do
-    kept = Preferences.stored(config, [delivery.recipient], category.key)
+    kept =
+      Preferences.stored(
+        config,
+        [delivery.recipient],
+        category.key,
+        delivery.notification.workspace
+      )
 
     case Preferences.setting(
            category,

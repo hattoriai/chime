@@ -31,16 +31,15 @@ defmodule Chime.Notify do
     ids = recipient_ids(config, notifier, params, opts)
     kind = notifier.__chime__(:kind)
 
-    # A group is a notifier's own: two notifiers with the same key do not
-    # join each other's notifications.
-    group = notifier.group(params)
-    group = group && "#{kind}:#{group}"
+    workspace = workspace(notifier, params, opts)
+    group = group_key(notifier, params, kind, workspace)
 
     event = %{
       id: Ecto.UUID.generate(),
       notifier: inspect(notifier),
       kind: kind,
       category: category.key,
+      workspace: workspace,
       data: notifier.data(params),
       actor: notifier.actor(params),
       group_key: group,
@@ -100,6 +99,22 @@ defmodule Chime.Notify do
     Fanout.notified(config, counts)
   end
 
+  # A group is a notifier's own, in its workspace: two notifiers with the
+  # same key do not join each other's notifications.
+  defp group_key(notifier, params, kind, workspace) do
+    case notifier.group(params) do
+      nil -> nil
+      group -> "#{workspace && workspace <> "/"}#{kind}:#{group}"
+    end
+  end
+
+  defp workspace(notifier, params, opts) do
+    case Keyword.fetch(opts, :workspace) do
+      {:ok, workspace} -> workspace && to_string(workspace)
+      :error -> notifier.workspace(params) |> then(&(&1 && to_string(&1)))
+    end
+  end
+
   defp check_channel(_config, _notifier, "feed"), do: :ok
 
   defp check_channel(%Config{mailer: nil}, notifier, "email") do
@@ -154,7 +169,7 @@ defmodule Chime.Notify do
     # The people's counts locked first, so that what follows sees what
     # other calls for the same people committed, and they wait for this.
     Counts.lock(config, ids)
-    kept = Preferences.stored(config, ids, plan.category.key)
+    kept = Preferences.stored(config, ids, plan.category.key, plan.event.workspace)
 
     in_feed =
       Map.new(ids, fn id ->
@@ -250,6 +265,7 @@ defmodule Chime.Notify do
           event_id: event.id,
           kind: event.kind,
           category: event.category,
+          workspace: event.workspace,
           group_key: event.group_key,
           grouping: grouping,
           grouped_until: until,

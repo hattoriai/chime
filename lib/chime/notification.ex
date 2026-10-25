@@ -5,6 +5,7 @@ defmodule Chime.Notification do
 
     * `:recipient` - the id of the person.
     * `:event` - the latest event of it; `:kind` and `:category` are its.
+    * `:workspace` - the workspace it is of, or nil (see `Chime.notify/3`).
     * `:count` - how many events it holds: 1, or more when the events of a
       group joined it ("Ana and 4 others commented"); `:actors` - who did
       them, the latest first, up to 20 (`%{"id", "name"}`);
@@ -25,6 +26,7 @@ defmodule Chime.Notification do
     belongs_to :event, Chime.Event
     field :kind, :string
     field :category, :string
+    field :workspace, :string
     field :group_key, :string
     field :grouping, :boolean, default: false
     field :grouped_until, :utc_datetime_usec
