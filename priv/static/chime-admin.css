@@ -25,3 +25,6 @@ button { font: inherit; padding: .25rem .7rem; border: 1px solid var(--line); bo
 pre { background: color-mix(in srgb, var(--line) 50%, transparent); padding: .75rem; border-radius: .4rem; overflow: auto; font-size: .85rem; }
 .flash { padding: .5rem .8rem; border: 1px solid var(--line); border-radius: .4rem; margin-bottom: 1rem; }
 iframe { width: 100%; min-height: 18rem; border: 1px solid var(--line); border-radius: .4rem; background: #fff; }
+.examples { display: flex; flex-wrap: wrap; gap: .4rem; }
+.examples a { padding: .2rem .7rem; border: 1px solid var(--line); border-radius: 999px; color: inherit; text-decoration: none; font-size: .9rem; }
+.examples a[aria-current="page"] { border-color: var(--accent); color: var(--accent); }
