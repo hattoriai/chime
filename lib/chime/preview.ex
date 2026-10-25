@@ -56,6 +56,8 @@ defmodule Chime.Preview do
           message = %Message{
             channel: channel,
             notifier: notifier,
+            kind: notifier.__chime__(:kind),
+            category: to_string(notifier.__chime__(:category)),
             data: data,
             recipient: recipient,
             notification: one
