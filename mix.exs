@@ -44,6 +44,7 @@ defmodule Chime.MixProject do
 
   defp deps do
     [
+      {:bandit, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       # The notifications live in the app's database, on PostgreSQL or
@@ -88,6 +89,10 @@ defmodule Chime.MixProject do
         priv/static/chime-sw.js
         priv/static/chime-admin.css
         priv/static/chime-admin.js
+        priv/static/chime.js
+        priv/static/chime-react.js
+        priv/static/types
+        package.json
         mix.exs
         .formatter.exs
         guides
@@ -186,6 +191,8 @@ defmodule Chime.MixProject do
 
   defp aliases do
     [
+      # The development server: dev.exs, at http://localhost:4100.
+      dev: ["run --no-halt dev.exs"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",

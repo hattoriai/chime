@@ -82,5 +82,9 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`Chime.resend/1`), the events, each person, each notification's log.
 - Previews: the notifier's `preview/0`, and the admin's `/previews`, each
   notifier as its channels say it, alone and as a group.
+- The client of the JSON API, `chime.js` (`createChime`), and its React
+  package, `chime/react`: `ChimeProvider`, `useNotifications`,
+  `useCounts`, `usePreferences`, `Bell` and `NotificationBell`, with
+  their types.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

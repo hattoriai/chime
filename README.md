@@ -211,7 +211,7 @@ Chime.explain(notification_id) |> Chime.Explain.format() |> IO.puts()
 * [The log](guides/explain.md): what Chime decided, and why.
 * [The admin](guides/admin.md): the deliveries, what failed and sending it again, each person, each notification's log.
 * [In LiveView](guides/live_view.md): the bell, the feed and the preferences.
-* [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, a React hook.
+* [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, the client and its React package.
 * [Languages](guides/languages.md): Chime's words through your Gettext.
 * [Testing](guides/testing.md): `Chime.Test`.
 

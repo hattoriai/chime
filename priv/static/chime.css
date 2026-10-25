@@ -118,7 +118,7 @@
 
 .chime-item { flex-wrap: wrap; }
 
-.chime-item-actions { display: flex; gap: 0.5rem; width: 100%; padding: 0 1rem 0.65rem; }
+.chime-item-actions { order: 1; display: flex; gap: 0.5rem; width: 100%; padding: 0 1rem 0.65rem; }
 
 .chime-action {
   padding: 0.25rem 0.75rem !important;
