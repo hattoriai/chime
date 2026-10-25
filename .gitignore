@@ -1,0 +1,12 @@
+/_build
+/deps
+/doc
+/cover
+/priv/plts
+/tmp
+erl_crash.dump
+chime-*.tar
+*.ez
+
+# Claude Code: personal settings and plugin work folders stay local.
+/.claude/settings.local.json
