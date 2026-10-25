@@ -476,7 +476,7 @@ defmodule Chime.Config do
 
   defp decode_key!(name, text, size) do
     case is_binary(text) && Base.url_decode64(text, padding: false) do
-      {:ok, <<_::binary-size(size)>> = key} ->
+      {:ok, <<_::binary-size(^size)>> = key} ->
         key
 
       _ ->
