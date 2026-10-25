@@ -64,6 +64,8 @@ defmodule Chime.Notifier do
     * `:notify_actor` - whether the person who did it (`c:actor/1`) is
       notified too, when they are among the recipients (`false`: nobody is
       told of what they did).
+    * `:audience_key` - with `c:audience/1`: the field of the query's
+      first binding its pages go by (`:id`).
     * `:group_window` - with `c:group/1`: how long a notification stays
       open to the events of its group, from the first (`{1, :hour}`).
 
@@ -127,6 +129,27 @@ defmodule Chime.Notifier do
   @callback recipients(params()) :: [term()]
 
   @doc """
+  Everyone it goes to, for many people: a query of the app's (`Ecto.Query`),
+  from the event's data, instead of `c:recipients/1`. Chime goes through it
+  in Oban jobs, 1000 people a page, by the key of the query's first
+  binding (`:audience_key` of `use`, `:id`), and makes each key a person's
+  id with `c:recipient_id/1`:
+
+      @impl true
+      def audience(_data), do: from(u in MyApp.User, where: not is_nil(u.confirmed_at))
+
+      @impl true
+      def recipient_id(id), do: "user:\#{id}"
+
+  The guard (`c:notify?/2`) is not asked of an audience: its people are
+  the query's.
+  """
+  @callback audience(data :: map()) :: Ecto.Queryable.t()
+
+  @doc "The id of a person of the audience, from its key (the key as a string)."
+  @callback recipient_id(term()) :: String.t()
+
+  @doc """
   What is kept of the params, as JSON (a map of strings, numbers, lists
   and maps), for the feed and the channels to render from. By default,
   the params themselves, as JSON.
@@ -174,6 +197,8 @@ defmodule Chime.Notifier do
   @callback email(data :: map(), Chime.Recipient.t(), Chime.Notification.t()) :: struct()
 
   @optional_callbacks recipients: 1,
+                      audience: 1,
+                      recipient_id: 1,
                       data: 1,
                       actor: 1,
                       group: 1,
@@ -206,7 +231,10 @@ defmodule Chime.Notifier do
       @impl Chime.Notifier
       def workspace(_params), do: nil
 
-      defoverridable data: 1, actor: 1, group: 1, workspace: 1
+      @impl Chime.Notifier
+      def recipient_id(key), do: to_string(key)
+
+      defoverridable data: 1, actor: 1, group: 1, workspace: 1, recipient_id: 1
 
       @before_compile Chime.Notifier
     end
@@ -235,6 +263,7 @@ defmodule Chime.Notifier do
       def __chime__(:kind), do: unquote(config.kind)
       def __chime__(:required), do: unquote(config.required)
       def __chime__(:notify_actor), do: unquote(config.notify_actor)
+      def __chime__(:audience_key), do: unquote(config.audience_key)
       def __chime__(:group_window), do: unquote(config.group_window)
     end
   end
@@ -302,6 +331,7 @@ defmodule Chime.Notifier do
       kind: to_string(kind),
       required: Keyword.get(opts, :required, false) == true,
       notify_actor: Keyword.get(opts, :notify_actor, false) == true,
+      audience_key: Keyword.get(opts, :audience_key, :id),
       group_window: seconds(module, :group_window, Keyword.get(opts, :group_window, {1, :hour}))
     }
   end

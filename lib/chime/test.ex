@@ -170,6 +170,24 @@ defmodule Chime.Test do
   end
 
   @doc """
+  Goes through the audiences being sent (`c:Chime.Notifier.audience/1`),
+  every page, as their jobs would.
+  """
+  @spec run_audiences() :: :ok
+  def run_audiences do
+    config = Config.get()
+
+    case config.repo.all(from(e in Event, where: e.status == "sending"), prefix: config.prefix) do
+      [] ->
+        :ok
+
+      events ->
+        Enum.each(events, &Chime.Notify.page(config, &1.id, &1.cursor))
+        run_audiences()
+    end
+  end
+
+  @doc """
   Sends the digests due at a time (now), as the hourly job would: for a
   daily digest at 9:00, a time after 9:00 the day after the notification.
   """

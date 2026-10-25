@@ -23,12 +23,6 @@ A page, mounted behind the app's admin pipeline, to find a person's
 notifications and read their log (`Chime.explain/1`), and to see the
 deliveries that fail.
 
-## Many people at once
-
-`Chime.notify/3` takes a list of people and works it 1000 at a time, in
-the caller's process. An event to everyone would rather take an Ecto
-query of the app's and work it in jobs, each batch its own job.
-
 ## The mail provider's events
 
 The `ref` of an email is the provider's id. Its webhooks (a bounce, a

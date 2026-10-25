@@ -16,7 +16,9 @@ defmodule Chime.Event do
     * `:recipients` - how many people it notified.
     * `:status` - `"sent"`; `"scheduled"` until its time, `:scheduled_at`
       (`Chime.notify/3` with `:at`), its people kept in `:audience`; or
-      `"cancelled"` before it (`Chime.cancel/2`).
+      `"cancelled"` before it (`Chime.cancel/2`); `"sending"` while the
+      jobs of an audience (`c:Chime.Notifier.audience/1`) go through it,
+      `:cursor` the key of the last person done.
   """
 
   use Chime.Schema
@@ -34,6 +36,7 @@ defmodule Chime.Event do
     field :status, :string, default: "sent"
     field :scheduled_at, :utc_datetime_usec
     field :audience, {:array, :string}
+    field :cursor, :string
     field :inserted_at, :utc_datetime_usec
   end
 

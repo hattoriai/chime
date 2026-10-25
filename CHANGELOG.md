@@ -55,5 +55,9 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `quiet: false` on a channel) and limits of a channel by person
   (`:limits`). A held delivery waits for its new time, and the log says
   why.
+- Audiences: a notifier's `audience/1`, a query of the app's, gone
+  through in Oban jobs 1000 people a page, each page once, for an
+  announcement to everyone; `recipient_id/1`, `audience_key:`,
+  `Chime.Test.run_audiences/0`.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

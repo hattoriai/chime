@@ -307,3 +307,31 @@ defmodule ChimeTest.DirectMessage do
 
   def telegram(data, _recipient, _notification), do: data["text"]
 end
+
+defmodule ChimeTest.Announcement do
+  @moduledoc "A notifier of the tests to everyone confirmed: an audience of the app's table."
+  use Chime.Notifier, category: :comments
+
+  import Ecto.Query
+
+  deliver :feed
+
+  @impl true
+  def audience(%{"only" => "unconfirmed"}),
+    do: from(u in ChimeTest.UserRow, where: not u.confirmed)
+
+  def audience(_data),
+    do: from(u in ChimeTest.UserRow, where: u.confirmed, order_by: [desc: u.name])
+
+  @impl true
+  def recipient_id(id), do: "user:#{id}"
+
+  @impl true
+  def data(params), do: Chime.Notifier.json!(__MODULE__, params)
+
+  @impl true
+  def actor(params), do: params["by"] && %{"id" => params["by"], "name" => "Admin"}
+
+  @impl true
+  def feed(data, _notification), do: %{title: data["title"]}
+end

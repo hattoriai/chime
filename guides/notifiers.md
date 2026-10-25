@@ -220,9 +220,44 @@ that holds other events too.
 
 `Chime.notify/3` inserts the notifications in batches of 1000, each its
 own transaction; the first is the event's, so that a call with an
-idempotency key that was made already does nothing. One event to many
-people is best sent from a job of your app, which Oban retries with the
-same key.
+idempotency key that was made already does nothing.
+
+For everyone, or any audience too large for a list, a notifier gives a
+query of your app's instead of `recipients/1`:
+
+```elixir
+defmodule MyApp.Notifications.Announcement do
+  use Chime.Notifier, category: :news
+
+  import Ecto.Query
+
+  deliver :feed
+  deliver :email, wait: {1, :hour}
+
+  @impl true
+  def audience(%{"plan" => plan}), do: from(u in MyApp.User, where: u.plan == ^plan and not is_nil(u.confirmed_at))
+  def audience(_data), do: from(u in MyApp.User, where: not is_nil(u.confirmed_at))
+
+  @impl true
+  def recipient_id(id), do: "user:#{id}"
+  ...
+end
+
+Chime.notify(MyApp.Notifications.Announcement, %{"title" => "We moved", "plan" => "pro"})
+```
+
+The call returns at once, with the event `"sending"`. Oban jobs go
+through the query 1000 people a page, by the key of its first binding
+(`:id`, or `audience_key:` of `use`), each page with the next page's job
+in its transaction, so that a page is done once whatever happens. The
+query is made from the event's data (`audience/1` gets the data, not the
+params), and `recipient_id/1` makes each key a person's id. When the
+last page is done, the event is `"sent"` with its count of people.
+
+The guard (`notify?/2`) is not asked of an audience: its people are the
+query's. The feed's conditions and each channel's are. `Chime.cancel/2`
+stops the pages that are left; with `feed: :remove`, the notifications
+of the pages done go too.
 
 ## In a transaction of your app
 

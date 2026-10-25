@@ -22,6 +22,8 @@ defmodule Chime.Migrations.V1 do
       add :status, :string, size: 16, null: false, default: "sent"
       add :scheduled_at, :utc_datetime_usec
       add :audience, {:array, :string}
+      # With the notifier's audience/1: the key of the last person done.
+      add :cursor, :string, size: 255
       add :inserted_at, :utc_datetime_usec, null: false
     end
 

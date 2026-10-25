@@ -30,7 +30,11 @@ defmodule Chime.Notify do
     Enum.each(deliveries, &check_channel(config, notifier, &1.channel))
 
     actor = notifier.actor(params)
-    {ids, known} = recipients(config, notifier, params, opts, actor)
+    audience? = audience?(notifier, opts)
+
+    {ids, known} =
+      if audience?, do: {[], %{}}, else: recipients(config, notifier, params, opts, actor)
+
     kind = notifier.__chime__(:kind)
 
     workspace = workspace(notifier, params, opts)
@@ -52,10 +56,135 @@ defmodule Chime.Notify do
 
     plan = plan(config, notifier, event, deliveries, now, params: params, known: known)
 
-    case opts[:at] do
-      nil -> now(plan, ids, opts)
-      at -> schedule(plan, ids, Chime.Schema.usec(at), opts)
+    case {audience?, opts[:at]} do
+      {true, at} -> start_audience(plan, at && Chime.Schema.usec(at), opts)
+      {false, nil} -> now(plan, ids, opts)
+      {false, at} -> schedule(plan, ids, Chime.Schema.usec(at), opts)
     end
+  end
+
+  # The notifier's audience/1 when it has no recipients/1, and :to does
+  # not give the people.
+  defp audience?(notifier, opts) do
+    not Keyword.has_key?(opts, :to) and not function_exported?(notifier, :recipients, 1) and
+      function_exported?(notifier, :audience, 1)
+  end
+
+  # An audience: the event "sending", and the job of its first page, now
+  # or at its time (then "scheduled", as any).
+  defp start_audience(%{config: config, event: event}, at, opts) do
+    event =
+      Map.merge(event, %{
+        status: if(at, do: "scheduled", else: "sending"),
+        scheduled_at: at,
+        recipients: 0
+      })
+
+    result =
+      config.repo.transaction(fn ->
+        case insert_event(config, event) do
+          :ok when at != nil -> Chime.Jobs.notify(config, event.id, at)
+          :ok -> Chime.Jobs.audience(config, event.id, nil)
+          :duplicate -> config.repo.rollback(:duplicate)
+        end
+      end)
+
+    case result do
+      {:ok, :ok} -> {:ok, config.repo.get!(Event, event.id, prefix: config.prefix)}
+      {:error, :duplicate} -> duplicate(config, opts)
+    end
+  end
+
+  @doc false
+  # A page of an audience: the next 1000 people after the cursor, in the
+  # page's transaction with the event's new cursor and the next page's
+  # job, so that a page is done once. The job of a page done already, or
+  # of an event cancelled, does nothing.
+  @spec page(Config.t(), Ecto.UUID.t(), String.t() | nil, DateTime.t()) :: :ok
+  def page(%Config{} = config, id, cursor, now \\ DateTime.utc_now()) do
+    now = Chime.Schema.usec(now)
+
+    result =
+      config.repo.transaction(fn ->
+        with %Event{status: "sending", cursor: ^cursor} = event <-
+               config.repo.get(Event, id, prefix: config.prefix),
+             notifier when notifier != nil <- Event.notifier(event) do
+          do_page(config, notifier, event, now)
+        else
+          _ -> %{}
+        end
+      end)
+
+    case result do
+      {:ok, counts} -> Fanout.notified(config, counts)
+    end
+
+    :ok
+  end
+
+  @page 1000
+
+  defp do_page(config, notifier, event, now) do
+    key = notifier.__chime__(:audience_key)
+    keys = audience_page(config, notifier, event, key)
+
+    actor = event.actor && (event.actor["id"] || event.actor[:id])
+
+    ids =
+      keys
+      |> Enum.map(&notifier.recipient_id/1)
+      |> Enum.reject(&(&1 == actor and not notifier.__chime__(:notify_actor)))
+
+    plan =
+      plan(
+        config,
+        notifier,
+        Map.take(event, [:id, :kind, :category, :workspace, :data, :actor, :group_key]),
+        notifier.__chime__(:deliveries),
+        now,
+        []
+      )
+
+    if event.cursor == nil, do: close_groups(plan)
+    counts = batch(plan, ids)
+
+    last = List.last(keys)
+    done? = length(keys) < @page
+    cursor = if last == nil, do: event.cursor, else: JSON.encode!(last)
+
+    from(e in Event, where: e.id == ^event.id)
+    |> config.repo.update_all(
+      [
+        set: [cursor: cursor, status: if(done?, do: "sent", else: "sending")],
+        inc: [recipients: map_size(counts)]
+      ],
+      prefix: config.prefix
+    )
+
+    unless done?, do: Chime.Jobs.audience(config, event.id, cursor)
+    counts
+  end
+
+  defp audience_page(config, notifier, event, key) do
+    query =
+      event.data
+      |> notifier.audience()
+      |> Ecto.Queryable.to_query()
+      |> exclude(:order_by)
+      |> exclude(:select)
+      |> exclude(:limit)
+      |> exclude(:preload)
+      |> order_by([x], asc: field(x, ^key))
+      |> select([x], field(x, ^key))
+      |> limit(@page)
+
+    query =
+      case event.cursor do
+        nil -> query
+        cursor -> where(query, [x], field(x, ^key) > ^JSON.decode!(cursor))
+      end
+
+    config.repo.all(query)
   end
 
   defp plan(config, notifier, event, deliveries, now, opts) do
@@ -172,9 +301,11 @@ defmodule Chime.Notify do
           from(e in Event, where: e.id == ^id and e.status == "scheduled", select: e)
           |> config.repo.update_all([set: [status: "sent"]], prefix: config.prefix)
 
-        case claim do
-          {1, [event]} -> fire_first(config, event, now)
-          {0, _} -> :done
+        with {1, [event]} <- claim,
+             {_plan, _ids, _counts, _rest} = first <- fire_first(config, event, now) do
+          first
+        else
+          _ -> :done
         end
       end)
 
@@ -190,6 +321,14 @@ defmodule Chime.Notify do
     case Event.notifier(event) do
       nil ->
         :done
+
+      _notifier when event.audience == nil ->
+        # An audience: its pages, from now.
+        from(e in Event, where: e.id == ^event.id)
+        |> config.repo.update_all([set: [status: "sending"]], prefix: config.prefix)
+
+        Chime.Jobs.audience(config, event.id, nil)
+        :audience
 
       notifier ->
         ids = event.audience || []
@@ -207,6 +346,17 @@ defmodule Chime.Notify do
   # notifications that hold it alone taken out of the feeds.
   @spec cancel(Config.t(), Event.t(), keyword()) ::
           {:ok, %{deliveries: non_neg_integer(), removed: non_neg_integer()}}
+  def cancel(%Config{} = config, %Event{status: status} = event, opts)
+      when status in ["scheduled", "sending"] do
+    from(e in Event, where: e.id == ^event.id and e.status == ^status)
+    |> config.repo.update_all([set: [status: "cancelled"]], prefix: config.prefix)
+
+    # The people an audience told already: as for one sent.
+    if status == "sending",
+      do: cancel(config, %{event | status: "cancelled"}, opts),
+      else: {:ok, %{deliveries: 0, removed: 0}}
+  end
+
   def cancel(%Config{} = config, %Event{status: "scheduled"} = event, _opts) do
     from(e in Event, where: e.id == ^event.id and e.status == "scheduled")
     |> config.repo.update_all([set: [status: "cancelled"]], prefix: config.prefix)
