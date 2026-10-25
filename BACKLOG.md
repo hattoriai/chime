@@ -23,12 +23,6 @@ A page, mounted behind the app's admin pipeline, to find a person's
 notifications and read their log (`Chime.explain/1`), and to see the
 deliveries that fail.
 
-## Words in the app's languages
-
-The components' words are English attributes, and `Chime.actors/1`
-speaks English. A `Chime.Messages` with the languages of Tayori's, as
-Tayori has, and Gettext for the digest's email.
-
 ## Many people at once
 
 `Chime.notify/3` takes a list of people and works it 1000 at a time, in

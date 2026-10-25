@@ -74,6 +74,9 @@ defmodule Chime.Config do
           feed shows them.
     * `:url` - the app's address (`"https://atelier.app"`), for the links
       of the digests to the notifications whose feed `:url` is a path.
+    * `:gettext` - the app's Gettext backend (`MyAppWeb.Gettext`), in
+      which Chime's words are translated, in the `"chime"` domain (see
+      `Chime.Messages`). Without it, they are English.
     * `:keep_days` - how long a notification is kept, with its deliveries,
       after it came (`180`). `nil` keeps them for ever.
     * `:scheduler` - `false` starts nothing that runs by itself: no
@@ -93,6 +96,7 @@ defmodule Chime.Config do
     :secret_key_base,
     :unsubscribe_url,
     :url,
+    :gettext,
     oban: %{name: Oban, queue: :default},
     categories: nil,
     channels: %{},
@@ -119,6 +123,7 @@ defmodule Chime.Config do
           secret_key_base: String.t() | nil,
           unsubscribe_url: String.t() | nil,
           url: String.t() | nil,
+          gettext: module() | nil,
           oban: %{name: term(), queue: atom()},
           categories: [category()] | nil,
           channels: %{String.t() => {module(), keyword()}},
@@ -151,6 +156,7 @@ defmodule Chime.Config do
       unsubscribe_url:
         opts[:unsubscribe_url] && String.trim_trailing(opts[:unsubscribe_url], "/"),
       url: opts[:url] && String.trim_trailing(opts[:url], "/"),
+      gettext: opts[:gettext],
       oban: oban(Keyword.get(opts, :oban, Oban)),
       categories: categories(opts[:categories]),
       channels: channels(Keyword.get(opts, :channels, [])),

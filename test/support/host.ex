@@ -1,6 +1,7 @@
 defmodule ChimeTest.AssignReader do
   @moduledoc "The app's own on_mount: the person of the session, in the assigns."
   def on_mount(:default, _params, session, socket) do
+    if locale = session["locale"], do: Gettext.put_locale(ChimeTest.Gettext, locale)
     {:cont, Phoenix.Component.assign(socket, :current_reader, session["reader"])}
   end
 end

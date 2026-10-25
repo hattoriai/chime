@@ -101,9 +101,10 @@ it is unseen again, and it comes to the top of the feed. A read, an
 archive, or the end of the window closes it: the next event is a new
 notification.
 
-`Chime.actors/1` says the actors in English ("Ana", "Ana and Rui", "Ana
-and 4 others"); an app in other languages writes its own from
-`notification.actors`.
+`Chime.actors/1` says the actors ("Ana", "Ana and Rui", "Ana and 4
+others") in your app's languages (see [Languages](languages.md)); an
+app can write its own from `notification.actors` and
+`notification.actor_count`.
 
 While a group's email waits (`wait:`), the events that join the group go
 with it: one email, as the group is when it goes, not one for each.

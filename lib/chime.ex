@@ -40,7 +40,7 @@ defmodule Chime do
   @typedoc "A person's counts: what they have not seen, and not read."
   @type counts :: %{unseen: non_neg_integer(), unread: non_neg_integer()}
 
-  alias Chime.{Config, Counts, Feed, Notification, Preferences}
+  alias Chime.{Config, Counts, Feed, Messages, Notification, Preferences}
 
   @doc "Starts Chime with the options of `Chime.Config`."
   @spec start_link(keyword()) :: Supervisor.on_start()
@@ -178,18 +178,28 @@ defmodule Chime do
 
   @doc """
   Who did a notification's events, in words: "Ana", "Ana and Rui", "Ana
-  and 4 others". In English; an app in other languages writes its own,
-  from `notification.actors`, the latest first.
+  and 4 others", in the app's languages (`Chime.Messages`). An app can
+  write its own from `notification.actors`, the latest first, and
+  `notification.actor_count`.
   """
   @spec actors(Notification.t()) :: String.t()
   def actors(%Notification{actors: actors} = notification) do
     total = max(notification.actor_count, length(actors))
 
     case Enum.map(actors, &(&1["name"] || &1[:name])) do
-      [] -> "Someone"
-      [one] -> one
-      [one, two] when total == 2 -> "#{one} and #{two}"
-      [one | _] -> "#{one} and #{total - 1} others"
+      [] ->
+        Messages.t("Someone")
+
+      [one] when total == 1 ->
+        one
+
+      [one, two] when total == 2 ->
+        Messages.t("%{one} and %{two}", one: one, two: two)
+
+      [one | _] ->
+        Messages.tn("%{name} and %{count} other", "%{name} and %{count} others", total - 1,
+          name: one
+        )
     end
   end
 

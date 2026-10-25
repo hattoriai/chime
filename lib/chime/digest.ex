@@ -42,7 +42,7 @@ defmodule Chime.Digest do
 
   import Ecto.Query
 
-  alias Chime.{Channels, Config, Delivery, Event, Feed, Recipient}
+  alias Chime.{Channels, Config, Delivery, Event, Feed, Messages, Recipient}
 
   require Logger
 
@@ -124,7 +124,14 @@ defmodule Chime.Digest do
   defp waiting(_config, id),
     do: from(d in Delivery, where: d.recipient == ^id and d.status == "digest")
 
+  # In the person's language: Chime's words and the notifiers' own.
   defp send_digest(config, recipient, due, now) do
+    Messages.with_locale(recipient.locale, fn ->
+      send_digest_in_locale(config, recipient, due, now)
+    end)
+  end
+
+  defp send_digest_in_locale(config, recipient, due, now) do
     period = if Enum.any?(due, &(&1.reason == "daily")), do: "daily", else: "weekly"
 
     items =
@@ -218,8 +225,8 @@ defmodule Chime.Digest do
   defp default_email(config, items, period) do
     title =
       if period == "daily",
-        do: "Your notifications of the day",
-        else: "Your notifications of the week"
+        do: Messages.t("Your notifications of the day"),
+        else: Messages.t("Your notifications of the week")
 
     lines =
       Enum.map(items, fn %{feed: feed} ->

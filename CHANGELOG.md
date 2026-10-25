@@ -31,5 +31,9 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `chime_api`: the feed and the preferences as JSON, a stream of
   server-sent events, and tokens (`Chime.Token`); `chime_unsubscribe`, the
   page of the links to unsubscribe.
+- Chime's words in the app's languages, through the app's own Gettext
+  (`:gettext`, `Chime.Messages`), from the template
+  `priv/gettext/chime.pot`; deliveries and digests in each person's
+  locale, the notifiers' own words with them.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

@@ -83,7 +83,7 @@ defmodule Chime.API do
 
   import Plug.Conn
 
-  alias Chime.{Config, Counts, Feed, Notification, Preferences, Resolver, Token}
+  alias Chime.{Config, Counts, Feed, Messages, Notification, Preferences, Resolver, Token}
 
   @limit 20
   @ping 25_000
@@ -259,8 +259,8 @@ defmodule Chime.API do
         Enum.map(Preferences.for_recipient(config, recipient), fn %{category: c, settings: s} ->
           %{
             key: c.key,
-            label: c.label,
-            description: c.description,
+            label: Messages.t(c.label),
+            description: c.description && Messages.t(c.description),
             required: c.required,
             settings: s
           }

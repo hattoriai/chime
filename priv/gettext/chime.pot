@@ -1,0 +1,121 @@
+# The words of Chime, for the "chime" domain of the app's Gettext.
+# Copy this file into priv/gettext/ and run mix gettext.merge priv/gettext
+# (see Chime.Messages).
+msgid ""
+msgstr ""
+
+msgid "%b %-d"
+msgstr ""
+
+msgid "%{count}d"
+msgstr ""
+
+msgid "%{count}h"
+msgstr ""
+
+msgid "%{count}m"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Apr"
+msgstr ""
+
+msgid "Archive"
+msgstr ""
+
+msgid "Aug"
+msgstr ""
+
+msgid "Daily"
+msgstr ""
+
+msgid "Dec"
+msgstr ""
+
+msgid "Email"
+msgstr ""
+
+msgid "Feb"
+msgstr ""
+
+msgid "Feed"
+msgstr ""
+
+msgid "Jan"
+msgstr ""
+
+msgid "Jul"
+msgstr ""
+
+msgid "Jun"
+msgstr ""
+
+msgid "Mar"
+msgstr ""
+
+msgid "Mark all as read"
+msgstr ""
+
+msgid "May"
+msgstr ""
+
+msgid "Nothing yet."
+msgstr ""
+
+msgid "Notifications"
+msgstr ""
+
+msgid "Nov"
+msgstr ""
+
+msgid "Oct"
+msgstr ""
+
+msgid "Off"
+msgstr ""
+
+msgid "On"
+msgstr ""
+
+msgid "Sep"
+msgstr ""
+
+msgid "Show more"
+msgstr ""
+
+msgid "Stop the emails of %{app} about %{what}?"
+msgstr ""
+
+msgid "This link is not valid."
+msgstr ""
+
+msgid "Unread"
+msgstr ""
+
+msgid "Unsubscribe"
+msgstr ""
+
+msgid "Unsubscribed"
+msgstr ""
+
+msgid "Weekly"
+msgstr ""
+
+msgid "You will no longer get emails of %{app} about %{what}. You can turn them on again in your settings."
+msgstr ""
+
+msgid "anything but your account"
+msgstr ""
+
+msgid "now"
+msgstr ""
+
+msgid "the app"
+msgstr ""
+
+msgid "%{name} and %{count} other"
+msgid_plural "%{name} and %{count} others"
+msgstr[0] ""
+msgstr[1] ""

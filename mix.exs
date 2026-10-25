@@ -51,6 +51,8 @@ defmodule Chime.MixProject do
       {:ecto, "~> 3.13"},
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22", only: [:dev, :test]},
+      # Chime's words in the app's languages, by the app's own backend.
+      {:gettext, "~> 0.26 or ~> 1.0", optional: true},
       {:postgrex, "~> 0.19", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:lazy_html, "~> 0.1", only: :test},
@@ -80,6 +82,7 @@ defmodule Chime.MixProject do
       files: ~w(
         lib
         priv/static/chime.css
+        priv/gettext/chime.pot
         mix.exs
         .formatter.exs
         guides
@@ -106,6 +109,7 @@ defmodule Chime.MixProject do
         "guides/explain.md",
         "guides/live_view.md",
         "guides/any_frontend.md",
+        "guides/languages.md",
         "guides/testing.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
@@ -120,6 +124,7 @@ defmodule Chime.MixProject do
           "guides/explain.md",
           "guides/live_view.md",
           "guides/any_frontend.md",
+          "guides/languages.md",
           "guides/testing.md"
         ]
       ],
@@ -134,7 +139,8 @@ defmodule Chime.MixProject do
           Chime.Notification,
           Chime.Feed,
           Chime.Preferences,
-          Chime.Explain
+          Chime.Explain,
+          Chime.Messages
         ],
         Channels: [
           Chime.Channel,

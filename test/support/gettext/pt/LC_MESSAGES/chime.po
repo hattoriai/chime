@@ -1,0 +1,39 @@
+msgid ""
+msgstr ""
+"Language: pt\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Notifications"
+msgstr "Notificações"
+
+msgid "Nothing yet."
+msgstr "Ainda nada."
+
+msgid "Someone"
+msgstr "Alguém"
+
+msgid "%{one} and %{two}"
+msgstr "%{one} e %{two}"
+
+msgid "%{name} and %{count} other"
+msgid_plural "%{name} and %{count} others"
+msgstr[0] "%{name} e mais %{count}"
+msgstr[1] "%{name} e mais %{count}"
+
+msgid "Your notifications of the week"
+msgstr "As suas notificações da semana"
+
+msgid "Unsubscribe"
+msgstr "Cancelar subscrição"
+
+msgid "Stop the emails of %{app} about %{what}?"
+msgstr "Deixar de receber emails de %{app} sobre %{what}?"
+
+msgid "Comments"
+msgstr "Comentários"
+
+msgid "Email"
+msgstr "Email"
+
+msgid "Weekly"
+msgstr "Semanal"

@@ -26,6 +26,8 @@ and by channels of your own, as each person wants. It gives your app:
 * the bell and the feed in your LiveViews, live over PubSub, across tabs;
 * a JSON API with a stream of server-sent events, for a frontend that
   Phoenix does not render (React, Vue, a mobile app);
+* its words in your languages, through your own Gettext, and each
+  email and digest in the person's language;
 * `Chime.Test`, to assert what was notified and run the deliveries in
   your tests, with no Oban to drain and no clock to wait for.
 
@@ -198,6 +200,7 @@ Chime.explain(notification_id) |> Chime.Explain.format() |> IO.puts()
 * [The log](guides/explain.md): what Chime decided, and why.
 * [In LiveView](guides/live_view.md): the bell, the feed and the preferences.
 * [Any frontend](guides/any_frontend.md): the JSON API, the stream, tokens, a React hook.
+* [Languages](guides/languages.md): Chime's words through your Gettext.
 * [Testing](guides/testing.md): `Chime.Test`.
 
 ## Development

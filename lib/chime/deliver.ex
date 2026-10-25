@@ -5,7 +5,7 @@ defmodule Chime.Deliver do
 
   import Ecto.Query
 
-  alias Chime.{Config, Delivery, Event, Explain, Message, Preferences}
+  alias Chime.{Config, Delivery, Event, Explain, Message, Messages, Preferences}
 
   require Logger
 
@@ -147,7 +147,10 @@ defmodule Chime.Deliver do
 
     result =
       :telemetry.span([:chime, :deliver], %{channel: delivery.channel, kind: message.kind}, fn ->
-        result = module.deliver(message, opts)
+        # In the person's language: the notifier's words and Chime's.
+        result =
+          Messages.with_locale(message.recipient.locale, fn -> module.deliver(message, opts) end)
+
         {result, %{channel: delivery.channel, kind: message.kind, result: result}}
       end)
 
