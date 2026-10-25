@@ -84,6 +84,16 @@ defmodule Chime.Notifier do
       any of them.
     * `:if` - it goes only if this function of the notifier,
       `(data, recipient) -> boolean`, says so; or `{module, function}`.
+    * `:throttle` - at most one by the channel for a group (or, with no
+      group, for the notifier) in this time: `{15, :minute}`. One that
+      comes sooner waits for the end of it.
+    * `:debounce` - with `:wait`: each event that joins the group while
+      it waits moves its time to `:wait` after that event, so a quick run
+      of events (messages a minute apart) goes as one. `:max_wait` is the
+      most it waits from the first (none).
+    * `:quiet` - `false` sends it in the person's quiet hours too
+      (`:quiet_hours` of `Chime.Config`). A required notification always
+      goes.
 
   ## What it says
 
@@ -298,28 +308,15 @@ defmodule Chime.Notifier do
 
   @doc false
   def __delivery__(module, channel, opts) when is_atom(channel) and is_list(opts) do
-    case Keyword.split(opts, [:wait, :if, :unless]) do
-      {_opts, []} ->
-        :ok
-
-      {_opts, other} ->
-        raise ArgumentError,
-              "deliver takes :wait, :if and :unless, got: #{inspect(Keyword.keys(other))}"
-    end
-
-    if channel == :feed and opts[:wait] do
-      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no :wait"
-    end
-
-    if channel == :feed and Enum.any?(List.wrap(opts[:unless]), &(&1 in [:read, :seen])) do
-      raise ArgumentError,
-            "#{inspect(module)}: the feed is decided when the notification comes, " <>
-              "before it can be read or seen"
-    end
+    check_delivery(module, channel, opts)
 
     %{
       channel: Atom.to_string(channel),
       wait: seconds(module, :wait, Keyword.get(opts, :wait, 0)),
+      throttle: opts[:throttle] && seconds(module, :throttle, opts[:throttle]),
+      debounce: Keyword.get(opts, :debounce, false) == true,
+      max_wait: opts[:max_wait] && seconds(module, :max_wait, opts[:max_wait]),
+      quiet: Keyword.get(opts, :quiet, true) != false,
       if: conditions(module, :if, opts[:if]),
       unless: conditions(module, :unless, opts[:unless])
     }
@@ -328,6 +325,37 @@ defmodule Chime.Notifier do
   def __delivery__(module, channel, _opts) do
     raise ArgumentError,
           "#{inspect(module)}: deliver takes the name of a channel (:feed, :email, ...), got: #{inspect(channel)}"
+  end
+
+  @known [:wait, :if, :unless, :throttle, :debounce, :max_wait, :quiet]
+
+  defp check_delivery(module, channel, opts) do
+    case Keyword.split(opts, @known) do
+      {_opts, []} ->
+        :ok
+
+      {_opts, other} ->
+        raise ArgumentError,
+              "deliver takes #{Enum.map_join(@known, ", ", &inspect/1)}, got: #{inspect(Keyword.keys(other))}"
+    end
+
+    if channel == :feed, do: check_feed(module, opts)
+
+    if opts[:max_wait] && !opts[:debounce] do
+      raise ArgumentError, "#{inspect(module)}: :max_wait is the limit of :debounce"
+    end
+  end
+
+  defp check_feed(module, opts) do
+    for key <- [:wait, :throttle, :debounce, :max_wait, :quiet], Keyword.has_key?(opts, key) do
+      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no #{inspect(key)}"
+    end
+
+    if Enum.any?(List.wrap(opts[:unless]), &(&1 in [:read, :seen])) do
+      raise ArgumentError,
+            "#{inspect(module)}: the feed is decided when the notification comes, " <>
+              "before it can be read or seen"
+    end
   end
 
   defp seconds(_module, _key, seconds) when is_integer(seconds) and seconds >= 0, do: seconds

@@ -49,5 +49,11 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Chime.cancel/2`: a scheduled event not sent, a sent one's waiting
   deliveries skipped, and with `feed: :remove` its notifications out of
   the feeds. `Chime.Test.run_scheduled/1`.
+- Delivery rules: `throttle:` (one by a channel for a group in a time),
+  `debounce:` and `max_wait:` (a quick run of a group's events as one),
+  quiet hours (`:quiet_hours` of the config and of each recipient, and
+  `quiet: false` on a channel) and limits of a channel by person
+  (`:limits`). A held delivery waits for its new time, and the log says
+  why.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

@@ -604,7 +604,37 @@ defmodule Chime.Notify do
 
       Chime.Jobs.deliveries(config, inserted)
     end)
+
+    debounce(plan, joined)
   end
+
+  # The deliveries that wait for a group's events and debounce: their time
+  # is `:wait` after this event, but no later than `:max_wait` after they
+  # were made. Their jobs find the new time when they run (Chime.Deliver).
+  defp debounce(%{config: config, channels: channels, now: now}, joined) do
+    ids = Enum.map(joined, &elem(&1, 1))
+
+    for %{debounce: true} = channel <- channels, ids != [] do
+      at = DateTime.add(now, channel.wait)
+
+      from(d in Delivery,
+        where:
+          d.notification_id in ^ids and d.channel == ^channel.channel and d.status == "scheduled",
+        select: {d.id, d.inserted_at}
+      )
+      |> config.repo.all(prefix: config.prefix)
+      |> Enum.group_by(fn {_id, made} -> capped(at, made, channel.max_wait) end, &elem(&1, 0))
+      |> Enum.each(fn {at, ids} ->
+        from(d in Delivery, where: d.id in ^ids)
+        |> config.repo.update_all([set: [scheduled_at: at]], prefix: config.prefix)
+      end)
+    end
+
+    :ok
+  end
+
+  defp capped(at, _made, nil), do: at
+  defp capped(at, made, max), do: Enum.min([at, DateTime.add(made, max)], DateTime)
 
   defp delivery(plan, recipient, notification_id, channel, kept, new?, now) do
     {setting, at} =

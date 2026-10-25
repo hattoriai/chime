@@ -88,6 +88,9 @@ defmodule Chime.Explain do
   defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: nil}),
     do: "waits until #{time(at)}"
 
+  defp delivery_reason(%Delivery{status: "scheduled", scheduled_at: at, reason: reason}),
+    do: "waits until #{time(at)}: #{reason}"
+
   defp delivery_reason(%Delivery{status: "digest", reason: period}),
     do: "waits for the person's #{period} digest"
 

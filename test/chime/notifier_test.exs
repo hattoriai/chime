@@ -36,7 +36,7 @@ defmodule Chime.NotifierTest do
           {"use Chime.Notifier, category: :c\ndeliver :email, unless: :nope",
            ~r/defines no nope\/2/},
           {"use Chime.Notifier, category: :c\ndeliver :email, sooner: true",
-           ~r/takes :wait, :if and :unless/}
+           ~r/deliver takes :wait, :if, :unless/}
         ] do
       name = "Chime.NotifierTest.N#{System.unique_integer([:positive])}"
 

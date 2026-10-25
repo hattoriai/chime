@@ -18,8 +18,15 @@ defmodule Chime.Deliver do
     query = from(d in Delivery, where: d.id == ^id, preload: [notification: :event])
 
     case config.repo.one(query, prefix: config.prefix) do
-      %Delivery{status: "scheduled"} = delivery -> try_decide(config, delivery, last?, now)
-      _done -> :ok
+      %Delivery{status: "scheduled"} = delivery ->
+        # A delivery whose time was moved later (a debounce, a rule) waits
+        # for its new time, with a job then.
+        if DateTime.diff(delivery.scheduled_at, now) > 1,
+          do: Chime.Jobs.deliveries(config, [delivery]),
+          else: try_decide(config, delivery, last?, now)
+
+      _done ->
+        :ok
     end
   end
 
@@ -65,7 +72,7 @@ defmodule Chime.Deliver do
 
       if setting in ["daily", "weekly"] and delivery.channel == "email",
         do: finish(config, delivery, "digest", setting, nil, now),
-        else: dispatch(config, delivery, message, last?, now)
+        else: by_the_rules(config, spec, delivery, message, last?, now)
     else
       {:skip, reason} -> finish(config, delivery, "skipped", reason, nil, now)
     end
@@ -182,6 +189,25 @@ defmodule Chime.Deliver do
         update(config, delivery, %{reason: "attempt #{attempts}: #{inspect(reason)}"}, now)
         {:error, reason}
     end
+  end
+
+  # Sent, unless a rule holds it for later (Chime.Rules).
+  defp by_the_rules(config, spec, delivery, message, last?, now) do
+    case Chime.Rules.check(config, spec, delivery, message.recipient, message.required, now) do
+      :ok -> dispatch(config, delivery, message, last?, now)
+      {:later, at, reason} -> later(config, delivery, at, reason, now)
+    end
+  end
+
+  # Held by a rule: the same delivery, at its new time, with a job then.
+  defp later(config, delivery, at, reason, now) do
+    from(d in Delivery, where: d.id == ^delivery.id and d.status == "scheduled")
+    |> config.repo.update_all([set: [scheduled_at: at, reason: reason, updated_at: now]],
+      prefix: config.prefix
+    )
+
+    Chime.Jobs.deliveries(config, [%{id: delivery.id, scheduled_at: at}])
+    :ok
   end
 
   defp finish(config, delivery, status, reason, ref, now) do

@@ -77,6 +77,15 @@ defmodule Chime.Config do
     * `:gettext` - the app's Gettext backend (`MyAppWeb.Gettext`), in
       which Chime's words are translated, in the `"chime"` domain (see
       `Chime.Messages`). Without it, they are English.
+    * `:limits` - the most each person gets by a channel in a time, by
+      channel: `[email: {3, :hour}, sms: {5, :day}]`. One past the limit
+      waits until it is under again. Required notifications do not count
+      against it, and are not held by it.
+    * `:quiet_hours` - the hours of the night, in each person's time zone,
+      when nothing but the feed goes: `{22, 8}`, from 22:00 to 08:00. What
+      comes then waits for the end. A person's own (`:quiet_hours` of
+      `Chime.Recipient`) comes first. Required notifications go all the
+      same (none).
     * `:keep_days` - how long a notification is kept, with its deliveries,
       after it came (`180`). `nil` keeps them for ever.
     * `:scheduler` - `false` starts nothing that runs by itself: no
@@ -97,6 +106,8 @@ defmodule Chime.Config do
     :unsubscribe_url,
     :url,
     :gettext,
+    :quiet_hours,
+    limits: %{},
     oban: %{name: Oban, queue: :default},
     categories: nil,
     channels: %{},
@@ -124,6 +135,8 @@ defmodule Chime.Config do
           unsubscribe_url: String.t() | nil,
           url: String.t() | nil,
           gettext: module() | nil,
+          quiet_hours: {0..23, 0..23} | nil,
+          limits: %{String.t() => {pos_integer(), pos_integer()}},
           oban: %{name: term(), queue: atom()},
           categories: [category()] | nil,
           channels: %{String.t() => {module(), keyword()}},
@@ -157,6 +170,8 @@ defmodule Chime.Config do
         opts[:unsubscribe_url] && String.trim_trailing(opts[:unsubscribe_url], "/"),
       url: opts[:url] && String.trim_trailing(opts[:url], "/"),
       gettext: opts[:gettext],
+      quiet_hours: quiet_hours(opts[:quiet_hours]),
+      limits: limits(Keyword.get(opts, :limits, [])),
       oban: oban(Keyword.get(opts, :oban, Oban)),
       categories: categories(opts[:categories]),
       channels: channels(Keyword.get(opts, :channels, [])),
@@ -344,6 +359,33 @@ defmodule Chime.Config do
 
   defp digest(other),
     do: raise(ArgumentError, ":digest must be a keyword list, got: #{inspect(other)}")
+
+  @doc false
+  def quiet_hours(nil), do: nil
+  def quiet_hours(false), do: false
+  def quiet_hours({from, to}) when from in 0..23 and to in 0..23 and from != to, do: {from, to}
+
+  def quiet_hours(other) do
+    raise ArgumentError,
+          ":quiet_hours must be {from, to}, two hours from 0 to 23 (or nil), got: #{inspect(other)}"
+  end
+
+  @units %{second: 1, minute: 60, hour: 3600, day: 86_400}
+
+  defp limits(limits) when is_list(limits) do
+    Map.new(limits, fn
+      {channel, {n, unit}}
+      when is_atom(channel) and is_integer(n) and n > 0 and is_map_key(@units, unit) ->
+        {Atom.to_string(channel), {n, Map.fetch!(@units, unit)}}
+
+      other ->
+        raise ArgumentError,
+              "each of :limits is a channel and {n, :minute | :hour | :day}, got: #{inspect(other)}"
+    end)
+  end
+
+  defp limits(other),
+    do: raise(ArgumentError, ":limits must be a keyword list, got: #{inspect(other)}")
 
   defp keep_days(nil), do: nil
   defp keep_days(days) when is_integer(days) and days > 0, do: days

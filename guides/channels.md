@@ -93,6 +93,41 @@ before `deliver/2` is called.
 A channel is in the preferences too: a person can turn it off for a
 category, as the feed and email.
 
+## Rules
+
+Some rules hold a delivery for later. They are decided at its time, and
+the log says what held it:
+
+```elixir
+# Quick messages go as one email, a minute after the last (at most 5
+# after the first); no more than one email of a conversation in 15 minutes.
+deliver :email, wait: {1, :minute}, debounce: true, max_wait: {5, :minute}, throttle: {15, :minute}
+```
+
+* `throttle:` - at most one by the channel for a group (or, with no
+  group, for the notifier) in a time. One that comes sooner waits for
+  the end of it, and goes as the group is then.
+* `debounce: true` - with `wait:`, each event that joins the group moves
+  the delivery's time to `wait` after it, so a quick run goes as one;
+  `max_wait:` is the most it waits from the first.
+* Quiet hours, in the config, in each person's time zone: nothing but the
+  feed goes in them, and what comes waits for the morning. A person's own
+  (`:quiet_hours` of their `Chime.Recipient`, or `false` for none) comes
+  first; a channel with `quiet: false` goes all the same.
+
+  ```elixir
+  {Chime, ..., quiet_hours: {22, 8}}
+  ```
+
+* Limits, in the config: the most each person gets by a channel in a
+  time. One past it waits until they are under it again.
+
+  ```elixir
+  {Chime, ..., limits: [email: {5, :hour}, sms: {3, :day}]}
+  ```
+
+Required notifications are held by none of them.
+
 ## When it goes
 
 Each delivery is an Oban job at its time, of the worker Chime.Worker,

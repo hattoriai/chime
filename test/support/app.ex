@@ -17,7 +17,7 @@ end
 
 defmodule ChimeTest.User do
   @moduledoc "A user of the app of the tests."
-  defstruct [:id, :name, :email, :locale, :time_zone, telegram: nil]
+  defstruct [:id, :name, :email, :locale, :time_zone, :quiet_hours, telegram: nil]
 end
 
 defmodule ChimeTest.Resolver do
@@ -32,6 +32,7 @@ defmodule ChimeTest.Resolver do
       name: user.name,
       locale: user.locale,
       time_zone: user.time_zone,
+      quiet_hours: user.quiet_hours,
       data: %{telegram: user.telegram}
     }
   end
@@ -264,4 +265,45 @@ defmodule ChimeTest.SelfToo do
 
   @impl true
   def feed(_data, _notification), do: %{title: "You did it"}
+end
+
+defmodule ChimeTest.DirectMessage do
+  @moduledoc """
+  A notifier of the tests as Superwave's DMs: quick messages from one
+  sender go as one email (debounce), at most one email of a conversation
+  in 15 minutes (throttle).
+  """
+  use Chime.Notifier, category: :comments, group_window: {1, :day}
+
+  deliver :feed
+
+  deliver :email,
+    wait: {1, :minute},
+    debounce: true,
+    max_wait: {5, :minute},
+    throttle: {15, :minute}
+
+  deliver :telegram, quiet: false
+
+  @impl true
+  def data(%{text: text}), do: %{"text" => text}
+
+  @impl true
+  def actor(%{from: from}), do: %{"id" => from, "name" => from}
+
+  @impl true
+  def group(%{from: from}), do: "dm:#{from}"
+
+  @impl true
+  def feed(data, notification), do: %{title: "#{Chime.actors(notification)}: #{data["text"]}"}
+
+  @impl true
+  def email(data, _recipient, notification),
+    do:
+      Swoosh.Email.new(
+        subject: "#{notification.count} from #{Chime.actors(notification)}",
+        text_body: data["text"]
+      )
+
+  def telegram(data, _recipient, _notification), do: data["text"]
 end
