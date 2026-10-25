@@ -1,0 +1,117 @@
+/* Chime's bell, feed and preferences: a start, for the app to change.
+   Every color is a custom property, so a theme sets a few. */
+
+:root {
+  --chime-ink: #1c1917;
+  --chime-muted: #78716c;
+  --chime-paper: #ffffff;
+  --chime-line: #e7e5e4;
+  --chime-accent: #ea580c;
+  --chime-unread: #fff7ed;
+  --chime-radius: 0.5rem;
+}
+
+.chime-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chime-ink);
+  cursor: pointer;
+}
+
+.chime-bell:hover { background: var(--chime-line); }
+
+.chime-dot {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.5rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--chime-accent);
+  box-shadow: 0 0 0 2px var(--chime-paper);
+}
+
+.chime-count {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.05rem;
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--chime-accent);
+  color: #fff;
+  font-size: 0.7rem;
+  line-height: 1.1rem;
+}
+
+.chime-feed {
+  position: absolute;
+  z-index: 50;
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: 70vh;
+  overflow: auto;
+  margin-top: 0.5rem;
+  border: 1px solid var(--chime-line);
+  border-radius: var(--chime-radius);
+  background: var(--chime-paper);
+  color: var(--chime-ink);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+}
+
+.chime-feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem 0.25rem;
+}
+
+.chime-feed-header h2 { margin: 0; font-size: 1rem; }
+
+.chime-feed button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+.chime-read-all, .chime-more { color: var(--chime-muted); font-size: 0.85rem; }
+
+.chime-filters { display: flex; gap: 0.25rem; padding: 0.25rem 0.75rem 0.5rem; }
+
+.chime-filters button { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.85rem; color: var(--chime-muted); }
+
+.chime-filters button[aria-pressed="true"] { background: var(--chime-line); color: var(--chime-ink); }
+
+.chime-empty { padding: 1.5rem 1rem; margin: 0; color: var(--chime-muted); text-align: center; }
+
+.chime-items { list-style: none; margin: 0; padding: 0; }
+
+.chime-item { display: flex; align-items: flex-start; border-top: 1px solid var(--chime-line); }
+
+.chime-unread { background: var(--chime-unread); }
+
+.chime-item-open {
+  flex: 1;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.5rem 0.65rem 1rem;
+  text-align: left;
+}
+
+.chime-unread .chime-item-title { font-weight: 600; }
+
+.chime-item-body { color: var(--chime-muted); font-size: 0.9rem; }
+
+.chime-item-time { color: var(--chime-muted); font-size: 0.75rem; }
+
+.chime-item-archive { padding: 0.6rem 0.9rem; color: var(--chime-muted); }
+
+.chime-more { width: 100%; padding: 0.6rem; border-top: 1px solid var(--chime-line) !important; }
+
+.chime-preferences table { border-collapse: collapse; width: 100%; }
+
+.chime-preferences th, .chime-preferences td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--chime-line); }
+
+.chime-preferences small { display: block; color: var(--chime-muted); font-weight: normal; }

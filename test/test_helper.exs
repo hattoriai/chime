@@ -1,5 +1,6 @@
 {:ok, _pid} = Phoenix.PubSub.Supervisor.start_link(name: ChimeTest.PubSub)
 {:ok, _pid} = ChimeTest.People.start_link()
+{:ok, _pid} = ChimeTest.Host.start()
 
 {:ok, _pid} =
   Chime.Fanout.start_link(
