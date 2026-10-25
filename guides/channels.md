@@ -56,6 +56,46 @@ def email(data, recipient, notification) do
 end
 ```
 
+## Slack, Discord, Teams, webhooks and SMS
+
+Chime has these too, each a module you name in the config, with its
+options:
+
+```elixir
+{Chime, ...,
+ channels: [
+   slack: {Chime.Channels.Slack, token: System.fetch_env!("SLACK_BOT_TOKEN")},
+   discord: {Chime.Channels.Discord, to: System.fetch_env!("DISCORD_WEBHOOK_URL")},
+   teams: {Chime.Channels.Teams, to: System.fetch_env!("TEAMS_WEBHOOK_URL")},
+   webhook: {Chime.Channels.Webhook, to: "https://hooks.myapp.com/chime", secret: System.fetch_env!("CHIME_WEBHOOK_SECRET")},
+   sms:
+     {Chime.Channels.Twilio,
+      account_sid: System.fetch_env!("TWILIO_ACCOUNT_SID"),
+      auth_token: System.fetch_env!("TWILIO_AUTH_TOKEN"),
+      from: "+15551234567"}
+ ]}
+```
+
+| Module | Where it writes |
+| --- | --- |
+| `Chime.Channels.Slack` | with a bot's `:token`, `chat.postMessage` to the person's Slack id (`data.slack`) or a channel (`to: "#ops"`); without, an incoming webhook's URL |
+| `Chime.Channels.Discord` | a channel's webhook URL: `to:` for everyone, or `data.discord` |
+| `Chime.Channels.Teams` | a workflow's or an incoming webhook's URL, as an Adaptive Card |
+| `Chime.Channels.Webhook` | your address, the notification as JSON, signed with `:secret` (`x-chime-signature`) |
+| `Chime.Channels.Twilio` | the person's phone (`data.phone`, E.164), from `:from` or a `:messaging_service_sid` |
+
+A person's address is in their recipient's data, under the channel's name
+(`to: {:data, :key}` for another key), or one address for everyone with
+`to: "..."`: Slack and Discord for your team's own alerts, for example.
+A person with none is skipped, and the log says so.
+
+Each says the notifier's function of the channel's name when it has one
+(`slack/3`, `sms/3`: a text, or `%{title:, body:, url:}`), else the
+feed's words, with the link that reads the notification. A refusal that
+will not change (an address gone, a number that replied STOP) is
+skipped; the rest is tried again. They send with `Req`: add
+`{:req, "~> 0.5"}` to your deps.
+
 ## Your own
 
 Telegram, SMS, Slack, Discord, your own push: a module of

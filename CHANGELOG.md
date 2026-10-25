@@ -72,5 +72,10 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the JSON API (`/devices`, `/push`); the notifier's `push/3`; the group
   as the tag that replaces a push on the device; `priv/static/chime-sw.js`;
   `mix chime.gen.vapid`.
+- Channels over HTTP: `Chime.Channels.Slack` (a bot's `chat.postMessage`,
+  or an incoming webhook), `Chime.Channels.Discord`, `Chime.Channels.Teams`
+  (an Adaptive Card), `Chime.Channels.Webhook` (JSON, signed with HMAC)
+  and `Chime.Channels.Twilio` (SMS); a person's address from their data,
+  or one for everyone.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

@@ -154,6 +154,11 @@ defmodule Chime.MixProject do
           Chime.Message,
           Chime.Channels.Email,
           Chime.Channels.Push,
+          Chime.Channels.Slack,
+          Chime.Channels.Discord,
+          Chime.Channels.Teams,
+          Chime.Channels.Webhook,
+          Chime.Channels.Twilio,
           Chime.Device,
           Chime.Delivery,
           Chime.Digest

@@ -18,6 +18,7 @@ and by channels of your own, as each person wants. It gives your app:
   that read it in the feed when they are opened;
 * push to browsers (Web Push), iPhones (APNs) and Android (FCM), each
   person's devices kept, those gone forgotten;
+* Slack, Discord, Microsoft Teams, signed webhooks and SMS by Twilio;
 * email through your Swoosh mailer, with one-click unsubscribe, and
   channels of your own (Telegram, SMS, Slack, push) in one behaviour;
 * delays and fallbacks: in the feed now, by email in ten minutes unless

@@ -391,3 +391,33 @@ defmodule ChimeTest.Pushed do
   def push(data, _recipient, _notification),
     do: %{title: "New: " <> data["text"], body: "Open it", url: "/thread", icon: "/icon.png"}
 end
+
+defmodule ChimeTest.Everywhere do
+  @moduledoc "A notifier of the tests by every channel of Chime's over HTTP."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+  deliver :slack
+  deliver :discord
+  deliver :teams
+  deliver :webhook
+  deliver :sms
+
+  @impl true
+  def data(%{text: text}), do: %{"text" => text}
+
+  @impl true
+  def feed(data, _notification), do: %{title: data["text"], body: "More", url: "/x"}
+
+  def sms(data, _recipient, _notification), do: "SMS: " <> data["text"]
+end
+
+defmodule ChimeTest.OnlySlack do
+  @moduledoc "A notifier of the tests by Slack alone."
+  use Chime.Notifier, category: :comments
+
+  deliver :slack
+
+  @impl true
+  def feed(_data, _notification), do: %{title: "Deploy done"}
+end
