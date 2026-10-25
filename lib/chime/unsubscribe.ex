@@ -1,15 +1,15 @@
 defmodule Chime.Unsubscribe do
   @moduledoc ~S"""
   The links to unsubscribe of the emails, mounted with
-  `Chime.Router.chime_unsubscribe/2` at the config's `:unsubscribe_url`:
+  `Chime.Router.chime_mail/2` at the config's `:mail_url`:
 
-      pipeline :unsubscribe do
+      pipeline :mail do
         plug :accepts, ["html"]
       end
 
       scope "/" do
-        pipe_through :unsubscribe
-        chime_unsubscribe "/notifications/unsubscribe", app_name: "Atelier"
+        pipe_through :mail
+        chime_mail "/notifications/mail", app_name: "Atelier"
       end
 
   An email of a notification has a link to turn off its category's
@@ -31,8 +31,9 @@ defmodule Chime.Unsubscribe do
   @behaviour Plug
 
   import Plug.Conn
+  import Chime.Messages, only: [t: 1, t: 2]
 
-  alias Chime.{Config, Preferences, Token}
+  alias Chime.{Config, Messages, Preferences, Token}
 
   @impl Plug
   def init(action), do: action
@@ -40,19 +41,35 @@ defmodule Chime.Unsubscribe do
   @impl Plug
   def call(conn, action) do
     config = Config.get()
-    app = conn.assigns.mount.options[:app_name] || "the app"
 
     case Token.verify_unsubscribe(config, conn.path_params["token"]) do
-      {:ok, recipient, category} -> handle(action, conn, config, app, recipient, category)
-      :error -> page(conn, 404, "Unsubscribe", "<p>This link is not valid.</p>")
+      {:ok, recipient, category} ->
+        # In the person's language, as their emails are.
+        Messages.with_locale(locale(config, recipient), fn ->
+          app = conn.assigns.mount.options[:app_name] || t("the app")
+          handle(action, conn, config, app, recipient, category)
+        end)
+
+      :error ->
+        page(conn, 404, t("Unsubscribe"), "<p>#{escape(t("This link is not valid."))}</p>")
+    end
+  end
+
+  defp locale(config, recipient) do
+    case config.resolver.recipients([recipient]) do
+      [%{locale: locale} | _] -> locale
+      _ -> nil
     end
   end
 
   defp handle(:show, conn, config, app, _recipient, category) do
-    page(conn, 200, "Unsubscribe", """
-    <p>Stop the emails of #{escape(app)} about #{escape(what(config, category))}?</p>
+    question =
+      t("Stop the emails of %{app} about %{what}?", app: app, what: what(config, category))
+
+    page(conn, 200, t("Unsubscribe"), """
+    <p>#{escape(question)}</p>
     <form method="post" action="#{escape(conn.request_path)}">
-      <button type="submit">Unsubscribe</button>
+      <button type="submit">#{escape(t("Unsubscribe"))}</button>
     </form>
     """)
   end
@@ -60,16 +77,20 @@ defmodule Chime.Unsubscribe do
   defp handle(:unsubscribe, conn, config, app, recipient, category) do
     :ok = Preferences.unsubscribe(config, recipient, category)
 
-    page(conn, 200, "Unsubscribed", """
-    <p>You will no longer get emails of #{escape(app)} about #{escape(what(config, category))}.
-    You can turn them on again in your settings.</p>
-    """)
+    done =
+      t(
+        "You will no longer get emails of %{app} about %{what}. You can turn them on again in your settings.",
+        app: app,
+        what: what(config, category)
+      )
+
+    page(conn, 200, t("Unsubscribed"), "<p>#{escape(done)}</p>")
   end
 
-  defp what(_config, "*"), do: "anything but your account"
+  defp what(_config, "*"), do: t("anything but your account")
 
   defp what(config, category) do
-    String.downcase(Config.category(config, category).label)
+    String.downcase(t(Config.category(config, category).label))
   rescue
     ArgumentError -> category
   end
@@ -85,14 +106,14 @@ defmodule Chime.Unsubscribe do
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="robots" content="noindex">
-        <title>#{title}</title>
+        <title>#{escape(title)}</title>
         <style>
           body { font: 16px/1.5 system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; color: #1c1917; }
           button { font: inherit; padding: .5rem 1rem; border-radius: .375rem; border: 1px solid #1c1917; background: #1c1917; color: #fff; cursor: pointer; }
         </style>
       </head>
       <body>
-        <h1>#{title}</h1>
+        <h1>#{escape(title)}</h1>
         #{body}
       </body>
     </html>

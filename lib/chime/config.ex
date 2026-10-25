@@ -14,7 +14,7 @@ defmodule Chime.Config do
          mailer: MyApp.Mailer,
          email_from: {"Atelier", "hello@atelier.app"},
          secret_key_base: Application.fetch_env!(:my_app, MyAppWeb.Endpoint)[:secret_key_base],
-         unsubscribe_url: "https://atelier.app/notifications/unsubscribe",
+         mail_url: "https://atelier.app/notifications/mail",
          categories: [
            comments: [label: "Comments on your stories"],
            followers: [label: "New followers", defaults: [email: :weekly]],
@@ -60,10 +60,11 @@ defmodule Chime.Config do
       or an address (required with `:mailer`).
     * `:secret_key_base` - the secret that signs the links to unsubscribe
       and the tokens of the JSON API (`Chime.Token`). At least 32 bytes.
-    * `:unsubscribe_url` - the address where `chime_unsubscribe` is
-      mounted, whole (`"https://atelier.app/notifications/unsubscribe"`),
-      for the links and the `List-Unsubscribe` headers of the emails.
-      With `:secret_key_base`; without them, the emails have no link.
+    * `:mail_url` - the address where `chime_mail` is mounted, whole
+      (`"https://atelier.app/notifications/mail"`), for the links of the
+      emails: to unsubscribe (and the `List-Unsubscribe` headers), and to
+      open a notification, which reads it (`Chime.link/2`). With
+      `:secret_key_base`; without them, the emails have no such links.
     * `:digest` - when the digests go, in each person's time zone (UTC
       for a person without one):
         * `:at` - the hour (`9`, for 09:00).
@@ -74,6 +75,32 @@ defmodule Chime.Config do
           feed shows them.
     * `:url` - the app's address (`"https://atelier.app"`), for the links
       of the digests to the notifications whose feed `:url` is a path.
+    * `:gettext` - the app's Gettext backend (`MyAppWeb.Gettext`), in
+      which Chime's words are translated, in the `"chime"` domain (see
+      `Chime.Messages`). Without it, they are English.
+    * `:limits` - the most each person gets by a channel in a time, by
+      channel: `[email: {3, :hour}, sms: {5, :day}]`. One past the limit
+      waits until it is under again. Required notifications do not count
+      against it, and are not held by it.
+    * `:quiet_hours` - the hours of the night, in each person's time zone,
+      when nothing but the feed goes: `{22, 8}`, from 22:00 to 08:00. What
+      comes then waits for the end. A person's own (`:quiet_hours` of
+      `Chime.Recipient`) comes first. Required notifications go all the
+      same (none).
+    * `:push` - the push services of the `:push` channel, each with its
+      keys (see the [Push](push.md) guide); the channel is there with one:
+        * `:web` - Web Push, for browsers: `:public_key` and `:private_key`,
+          the app's VAPID keys, URL-safe Base64 (`mix chime.gen.vapid`),
+          `:subject`, a `mailto:` or `https:` address of the app's, and
+          `:ttl`, how long a push waits for a browser that is off, in
+          seconds (one day).
+        * `:apns` - Apple's: `:key`, the `.p8` key (its text), `:key_id`,
+          `:team_id`, `:topic`, the app's bundle id, and `:env`,
+          `:production` or `:sandbox` (`:production`).
+        * `:fcm` - Firebase's: `:service_account`, its JSON (the text, or a
+          map), from Firebase's console.
+        * `:req_options` - options of the requests to the services, for
+          `Req` (`[]`).
     * `:keep_days` - how long a notification is kept, with its deliveries,
       after it came (`180`). `nil` keeps them for ever.
     * `:scheduler` - `false` starts nothing that runs by itself: no
@@ -91,8 +118,12 @@ defmodule Chime.Config do
     :mailer,
     :email_from,
     :secret_key_base,
-    :unsubscribe_url,
+    :mail_url,
     :url,
+    :gettext,
+    :quiet_hours,
+    :push,
+    limits: %{},
     oban: %{name: Oban, queue: :default},
     categories: nil,
     channels: %{},
@@ -117,8 +148,12 @@ defmodule Chime.Config do
           mailer: module() | nil,
           email_from: String.t() | {String.t(), String.t()} | nil,
           secret_key_base: String.t() | nil,
-          unsubscribe_url: String.t() | nil,
+          mail_url: String.t() | nil,
           url: String.t() | nil,
+          gettext: module() | nil,
+          quiet_hours: {0..23, 0..23} | nil,
+          push: map() | nil,
+          limits: %{String.t() => {pos_integer(), pos_integer()}},
           oban: %{name: term(), queue: atom()},
           categories: [category()] | nil,
           channels: %{String.t() => {module(), keyword()}},
@@ -148,12 +183,15 @@ defmodule Chime.Config do
       mailer: opts[:mailer],
       email_from: opts[:email_from],
       secret_key_base: secret_key_base(opts[:secret_key_base]),
-      unsubscribe_url:
-        opts[:unsubscribe_url] && String.trim_trailing(opts[:unsubscribe_url], "/"),
+      mail_url: opts[:mail_url] && String.trim_trailing(opts[:mail_url], "/"),
       url: opts[:url] && String.trim_trailing(opts[:url], "/"),
+      gettext: opts[:gettext],
+      quiet_hours: quiet_hours(opts[:quiet_hours]),
+      limits: limits(Keyword.get(opts, :limits, [])),
+      push: push(opts[:push]),
       oban: oban(Keyword.get(opts, :oban, Oban)),
       categories: categories(opts[:categories]),
-      channels: channels(Keyword.get(opts, :channels, [])),
+      channels: channels(Keyword.get(opts, :channels, []), opts[:push]),
       digest: digest(Keyword.get(opts, :digest, [])),
       keep_days: keep_days(Keyword.get(opts, :keep_days, 180)),
       scheduler: scheduler(Keyword.get(opts, :scheduler, true))
@@ -284,9 +322,13 @@ defmodule Chime.Config do
     }
   end
 
-  defp channels(channels) when is_list(channels) do
-    Map.new(channels, fn
-      {name, _} when name in [:feed, :email] ->
+  defp channels(channels, push) when is_list(channels) do
+    # The :push channel, with the services of :push.
+    builtin = if push, do: %{"push" => {Chime.Channels.Push, []}}, else: %{}
+
+    channels
+    |> Map.new(fn
+      {name, _} when name in [:feed, :email] or (name == :push and push != nil) ->
         raise ArgumentError, "#{inspect(name)} is Chime's own channel: give yours another name"
 
       {name, module} when is_atom(name) and is_atom(module) ->
@@ -299,9 +341,10 @@ defmodule Chime.Config do
         raise ArgumentError,
               "each of :channels is a name and a module of Chime.Channel, got: #{inspect(other)}"
     end)
+    |> Map.merge(builtin)
   end
 
-  defp channels(other) do
+  defp channels(other, _push) do
     raise ArgumentError, ":channels must be a keyword list, got: #{inspect(other)}"
   end
 
@@ -338,6 +381,124 @@ defmodule Chime.Config do
 
   defp digest(other),
     do: raise(ArgumentError, ":digest must be a keyword list, got: #{inspect(other)}")
+
+  @doc false
+  def quiet_hours(nil), do: nil
+  def quiet_hours(false), do: false
+  def quiet_hours({from, to}) when from in 0..23 and to in 0..23 and from != to, do: {from, to}
+
+  def quiet_hours(other) do
+    raise ArgumentError,
+          ":quiet_hours must be {from, to}, two hours from 0 to 23 (or nil), got: #{inspect(other)}"
+  end
+
+  @units %{second: 1, minute: 60, hour: 3600, day: 86_400}
+
+  defp push(nil), do: nil
+
+  defp push(opts) when is_list(opts) do
+    req = Keyword.get(opts, :req_options, [])
+
+    unless Code.ensure_loaded?(Req),
+      do: raise(ArgumentError, "the :push option needs the :req dependency")
+
+    services =
+      for {service, settings} <- Keyword.take(opts, [:web, :apns, :fcm]), into: %{} do
+        {service, push_service(service, settings, req)}
+      end
+
+    if services == %{}, do: raise(ArgumentError, ":push needs :web, :apns or :fcm")
+    services
+  end
+
+  defp push(other),
+    do: raise(ArgumentError, ":push must be a keyword list, got: #{inspect(other)}")
+
+  defp push_service(:web, opts, req) do
+    private = decode_key!(:private_key, opts[:private_key], 32)
+    public = decode_key!(:public_key, opts[:public_key], 65)
+    subject = opts[:subject]
+
+    unless is_binary(subject) and String.starts_with?(subject, ["mailto:", "https:"]) do
+      raise ArgumentError,
+            ":subject of :web of :push must be a mailto: or https: address of the app's"
+    end
+
+    %{
+      private_key: private,
+      public_key: Base.url_encode64(public, padding: false),
+      subject: subject,
+      ttl: Keyword.get(opts, :ttl, 86_400),
+      req_options: req
+    }
+  end
+
+  defp push_service(:apns, opts, req) do
+    for key <- [:key, :key_id, :team_id, :topic], !is_binary(opts[key]) do
+      raise ArgumentError, ":apns of :push needs #{inspect(key)}"
+    end
+
+    env = Keyword.get(opts, :env, :production)
+
+    unless env in [:production, :sandbox],
+      do: raise(ArgumentError, ":env of :apns must be :production or :sandbox")
+
+    %{
+      key: opts[:key],
+      key_id: opts[:key_id],
+      team_id: opts[:team_id],
+      topic: opts[:topic],
+      env: env,
+      req_options: req
+    }
+  end
+
+  defp push_service(:fcm, opts, req) do
+    account =
+      case opts[:service_account] do
+        json when is_binary(json) -> JSON.decode!(json)
+        %{} = map -> Map.new(map, fn {k, v} -> {to_string(k), v} end)
+        _ -> raise ArgumentError, ":fcm of :push needs :service_account, its JSON"
+      end
+
+    for key <- ["project_id", "client_email", "private_key"], !is_binary(account[key]) do
+      raise ArgumentError, "the :service_account of :fcm has no #{key}"
+    end
+
+    %{
+      project_id: account["project_id"],
+      client_email: account["client_email"],
+      private_key: account["private_key"],
+      token_uri: account["token_uri"] || "https://oauth2.googleapis.com/token",
+      req_options: req
+    }
+  end
+
+  defp decode_key!(name, text, size) do
+    case is_binary(text) && Base.url_decode64(text, padding: false) do
+      {:ok, <<_::binary-size(^size)>> = key} ->
+        key
+
+      _ ->
+        raise ArgumentError,
+              "#{inspect(name)} of :web of :push must be a VAPID key, URL-safe Base64"
+    end
+  end
+
+  defp limits(limits) when is_list(limits) do
+    Map.new(limits, fn
+      {channel, {n, unit}}
+      when is_atom(channel) and is_integer(n) and n > 0 and is_map_key(@units, unit) ->
+        {Atom.to_string(channel), {n, Map.fetch!(@units, unit)}}
+
+      other ->
+        raise ArgumentError,
+              "each of :limits is a channel and {n, :minute | :hour | :day}, got: #{inspect(other)}"
+    end)
+  end
+
+  defp limits(other),
+    do: raise(ArgumentError, ":limits must be a keyword list, got: #{inspect(other)}")
 
   defp keep_days(nil), do: nil
   defp keep_days(days) when is_integer(days) and days > 0, do: days

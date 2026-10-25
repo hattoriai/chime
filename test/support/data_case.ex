@@ -60,7 +60,7 @@ defmodule ChimeTest.DataCase do
       mailer: ChimeTest.Mailer,
       email_from: {"The app", "hello@app.test"},
       secret_key_base: String.duplicate("chime-test-secret-", 4),
-      unsubscribe_url: "https://app.test/notifications/unsubscribe",
+      mail_url: "https://app.test/notifications/mail",
       url: "https://app.test",
       categories: [
         comments: [label: "Comments", description: "On your stories"],
@@ -74,6 +74,10 @@ defmodule ChimeTest.DataCase do
 
   @doc "Changes the config of the test: the options over the tests' own."
   def reconfigure(%{repo: repo, oban: oban}, opts) do
+    for {key, _} <- :persistent_term.get(),
+        match?({Chime.Push.FCM, _}, key),
+        do: :persistent_term.erase(key)
+
     config = Chime.Config.new(Keyword.merge(config_opts(repo, oban), opts))
     Chime.Config.put(config)
     config
@@ -100,7 +104,7 @@ defmodule ChimeTest.DataCase do
       author: Keyword.get(opts, :author, "Ana")
     }
 
-    Chime.notify(ChimeTest.NewComment, params, Keyword.take(opts, [:key, :now]))
+    Chime.notify(ChimeTest.NewComment, params, Keyword.take(opts, [:key, :now, :at]))
   end
 
   @doc "Minutes from now, or from a time."

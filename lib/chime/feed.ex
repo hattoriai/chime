@@ -32,6 +32,7 @@ defmodule Chime.Feed do
       preload: :event
     )
     |> filter(filter)
+    |> in_workspace(opts[:workspace])
     |> before(config, recipient, opts[:before])
     |> config.repo.all(prefix: config.prefix)
   end
@@ -40,6 +41,9 @@ defmodule Chime.Feed do
   defp filter(query, :unread), do: where(query, [n], is_nil(n.archived_at) and is_nil(n.read_at))
   defp filter(query, :archived), do: where(query, [n], not is_nil(n.archived_at))
   defp filter(query, :all), do: query
+
+  defp in_workspace(query, nil), do: query
+  defp in_workspace(query, workspace), do: where(query, [n], n.workspace == ^workspace)
 
   # The page after a notification: those older than it, in the feed's
   # order. An id the person does not have gives the first page.
@@ -90,7 +94,7 @@ defmodule Chime.Feed do
   @spec json(Notification.t()) :: map()
   def json(%Notification{} = n) do
     feed = render(n)
-    {known, extra} = Map.split(feed, [:title, :body, :url, :icon])
+    {known, extra} = Map.split(feed, [:title, :body, :url, :icon, :actions])
 
     %{
       id: n.id,
@@ -100,6 +104,13 @@ defmodule Chime.Feed do
       body: known[:body],
       url: known[:url],
       icon: known[:icon],
+      actions:
+        for %{key: key} = a <- known[:actions] || [] do
+          %{key: to_string(key), label: a[:label] || to_string(key)}
+        end,
+      action: n.action,
+      actedAt: n.acted_at,
+      clickedAt: n.clicked_at,
       extra: Map.new(extra, fn {k, v} -> {to_string(k), v} end),
       count: n.count,
       actors: n.actors,
@@ -116,21 +127,26 @@ defmodule Chime.Feed do
 
   @doc false
   # Marks what a person has in the feed: seen, read, unread, archived,
-  # unarchived, for these ids or :all. Their counts are counted again and
-  # told to their other pages. Returns the counts.
-  @spec mark(Config.t(), String.t(), atom(), [String.t()] | :all) :: Counts.counts()
-  def mark(%Config{} = config, recipient, action, ids) do
+  # unarchived, for these ids or :all, of a workspace or every one. Their
+  # counts are counted again and told to their other pages. Returns the
+  # counts, the whole feed's and each workspace's.
+  @spec mark(Config.t(), String.t(), atom(), [String.t()] | :all, String.t() | nil) ::
+          Counts.all()
+  def mark(%Config{} = config, recipient, action, ids, workspace \\ nil) do
     now = DateTime.utc_now()
 
     query =
       from(n in Notification, where: n.recipient == ^recipient)
       |> only(ids)
+      |> in_workspace(workspace)
 
     {:ok, counts} =
       config.repo.transaction(fn ->
         Counts.lock(config, [recipient])
-        # Reading sees too, keeping the time of an earlier look.
-        if action == :read, do: update(config, query, :seen, now)
+        # Reading sees too, keeping the time of an earlier look; a click
+        # reads.
+        if action in [:read, :click], do: update(config, query, :seen, now)
+        if action == :click, do: update(config, query, :read, now)
         update(config, query, action, now)
         Map.fetch!(Counts.refresh(config, [recipient]), recipient)
       end)
@@ -158,6 +174,8 @@ defmodule Chime.Feed do
   defp change(query, :read, now) do
     {where(query, [n], is_nil(n.read_at)), read_at: now, grouping: false}
   end
+
+  defp change(query, :click, now), do: {where(query, [n], is_nil(n.clicked_at)), clicked_at: now}
 
   defp change(query, :unread, _now), do: {where(query, [n], not is_nil(n.read_at)), read_at: nil}
 

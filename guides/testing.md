@@ -40,6 +40,8 @@ end
   `:at` (now), `:to`, `:channel`, `:last_attempt`. It returns them as they
   are after.
 * `deliveries/2` - a person's deliveries.
+* `run_scheduled/1` - the scheduled notifications due at a time.
+* `run_audiences/0` - every page of the audiences being sent.
 * `run_digests/1` - the digests due at a time.
 * `explain/1` - the log of a notification, as text.
 * `events/1` - the events of a notifier.

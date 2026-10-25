@@ -1,0 +1,29 @@
+{
+  "name": "chime",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./priv/static/types/index.d.ts",
+      "import": "./priv/static/chime.js"
+    },
+    "./react": {
+      "types": "./priv/static/types/react.d.ts",
+      "import": "./priv/static/chime-react.js"
+    },
+    "./chime.css": "./priv/static/chime.css",
+    "./chime-sw.js": "./priv/static/chime-sw.js"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "files": [
+    "priv/static"
+  ]
+}

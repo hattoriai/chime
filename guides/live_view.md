@@ -36,16 +36,18 @@ which marks them seen. A click on a notification reads it and goes to its
 `:url`; the feed has "Mark all as read", a filter of the unread, an
 archive button on each, and "Show more".
 
-The words are English, as attributes; give your own:
+The words are Chime's, in your app's languages through your Gettext
+(see [Languages](languages.md)). Each is an attribute too, for words of
+your own:
 
 ```heex
-<Chime.Components.feed chime={@chime} title={gettext("Notifications")} empty={gettext("Nothing yet.")} />
+<Chime.Components.feed chime={@chime} empty={gettext("No news is good news.")} />
 ```
 
 The preferences, on a settings page:
 
 ```heex
-<Chime.Components.preferences id="notifications" chime={@chime} labels={%{"email" => gettext("Email")}} />
+<Chime.Components.preferences id="notifications" chime={@chime} />
 ```
 
 ## Your own markup
@@ -60,6 +62,8 @@ them:
 * `chime:read`, `chime:archive` with `phx-value-id`.
 * `chime:read_all`.
 * `chime:visit` with `phx-value-id` - reads it, and goes to its `:url`.
+* `chime:action` with `phx-value-id` and `phx-value-action` - takes an
+  action of its feed's `:actions` (`Chime.act/3`), and goes where it says.
 
 ```heex
 <button phx-click="chime:toggle">

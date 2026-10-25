@@ -32,6 +32,23 @@ defmodule Chime.API do
     * `POST /:id/read`, `/:id/unread`, `/:id/archive`, `/:id/unarchive` -
       one notification. The counts; a 404 for one the person does not
       have.
+    * `POST /:id/actions/:action` - takes an action of the notification
+      (`Chime.act/3`): the counts, with `action` and `url` (where to go
+      next, or null); a 404, or a 422 with `"unknown_action"`,
+      `"already"` (an action was taken), or `"failed"` and the notifier's
+      `reason`.
+    * `GET /push` - `{"vapidPublicKey": key, "services": ["web", ...]}`,
+      the app's public key for a browser's `pushManager.subscribe/1`.
+    * `GET /devices` - the person's devices: `{"devices": [{"id", "kind",
+      "name", "enabled", "lastUsedAt", "insertedAt"}]}`.
+    * `POST /devices` - registers one, with `{"kind": "web", "token":
+      subscription.endpoint, "keys": subscription.keys, "name": "..."}`, or
+      `{"kind": "apns" | "fcm", "token": "..."}`: a 201 with `{"device"}`,
+      or a 422 with `"unknown_kind"`, `"invalid_token"`,
+      `"invalid_subscription"`.
+    * `PATCH /devices/:id` - `{"enabled": false}` turns it off, and on;
+      `{"name": "..."}` names it.
+    * `DELETE /devices/:id` - removes it.
     * `GET /preferences` - the person's settings:
       `{"categories": [{"key", "label", "description", "required",
       "settings": {"feed": "on", "email": "daily"}}], "channels": [{"key":
@@ -60,6 +77,8 @@ defmodule Chime.API do
         "body": "Lovely light.",
         "url": "/stories/42",
         "icon": "comment",
+        "actions": [{"key": "reply", "label": "Reply"}],
+        "action": null, "actedAt": null, "clickedAt": null,
         "extra": {},
         "count": 3,
         "actors": [{"id": "user:7", "name": "Ana"}],
@@ -83,7 +102,7 @@ defmodule Chime.API do
 
   import Plug.Conn
 
-  alias Chime.{Config, Counts, Feed, Notification, Preferences, Resolver, Token}
+  alias Chime.{Config, Counts, Feed, Messages, Notification, Preferences, Resolver, Token}
 
   @limit 20
   @ping 25_000
@@ -97,7 +116,7 @@ defmodule Chime.API do
     conn = fetch_query_params(conn)
 
     case reader(conn, config) do
-      {:ok, recipient} -> handle(action, conn, config, recipient)
+      {:ok, recipient} -> handle(action, workspace(conn, config), config, recipient)
       {:error, :expired} -> json(conn, 401, %{error: "token_expired"})
       {:error, _} -> json(conn, 401, %{error: "unauthorized"})
     end
@@ -119,6 +138,20 @@ defmodule Chime.API do
       _ -> resolve(conn, config)
     end
   end
+
+  # The workspace of the request: `?workspace=`, else the resolver's. A
+  # person has only their own notifications in any workspace.
+  defp workspace(conn, config) do
+    workspace =
+      case conn.query_params["workspace"] do
+        workspace when is_binary(workspace) and workspace != "" -> workspace
+        _ -> Resolver.workspace(config.resolver, conn)
+      end
+
+    assign(conn, :chime_workspace, workspace)
+  end
+
+  defp ws(conn), do: conn.assigns.chime_workspace
 
   defp resolve(conn, config) do
     case Resolver.reader(config.resolver, conn) do
@@ -145,12 +178,17 @@ defmodule Chime.API do
       end
 
     notifications =
-      Feed.list(config, recipient, limit: limit + 1, filter: filter, before: params["before"])
+      Feed.list(config, recipient,
+        limit: limit + 1,
+        filter: filter,
+        before: params["before"],
+        workspace: ws(conn)
+      )
 
     json(
       conn,
       200,
-      Map.merge(Counts.get(config, recipient), %{
+      Map.merge(Counts.get(config, recipient, ws(conn)), %{
         notifications: notifications |> Enum.take(limit) |> Enum.map(&Feed.json/1),
         more: length(notifications) > limit
       })
@@ -158,13 +196,13 @@ defmodule Chime.API do
   end
 
   defp handle(:counts, conn, config, recipient),
-    do: json(conn, 200, Counts.get(config, recipient))
+    do: json(conn, 200, Counts.get(config, recipient, ws(conn)))
 
   defp handle(:seen, conn, config, recipient),
-    do: json(conn, 200, Feed.mark(config, recipient, :seen, :all))
+    do: json(conn, 200, mark(conn, config, recipient, :seen, :all))
 
   defp handle(:read_all, conn, config, recipient),
-    do: json(conn, 200, Feed.mark(config, recipient, :read, :all))
+    do: json(conn, 200, mark(conn, config, recipient, :read, :all))
 
   defp handle(action, conn, config, recipient)
        when action in [:read, :unread, :archive, :unarchive] do
@@ -173,14 +211,85 @@ defmodule Chime.API do
     with {:ok, id} <- Ecto.UUID.cast(id),
          %Notification{} <-
            config.repo.get_by(Notification, [id: id, recipient: recipient], prefix: config.prefix) do
-      json(conn, 200, Feed.mark(config, recipient, action, [id]))
+      json(conn, 200, mark(conn, config, recipient, action, [id]))
     else
       _ -> json(conn, 404, %{error: "not_found"})
     end
   end
 
+  defp handle(:act, conn, config, recipient) do
+    case Chime.Actions.act(config, recipient, conn.path_params["id"], conn.path_params["action"]) do
+      {:ok, %{action: action, url: url}} ->
+        json(
+          conn,
+          200,
+          Map.merge(Counts.get(config, recipient, ws(conn)), %{action: action, url: url})
+        )
+
+      {:error, :not_found} ->
+        json(conn, 404, %{error: "not_found"})
+
+      {:error, code} when code in [:unknown_action, :already] ->
+        json(conn, 422, %{error: Atom.to_string(code)})
+
+      {:error, reason} ->
+        json(conn, 422, %{error: "failed", reason: inspect(reason)})
+    end
+  end
+
+  defp handle(:push, conn, config, _recipient) do
+    web = config.push && config.push[:web]
+
+    json(conn, 200, %{
+      vapidPublicKey: web && web.public_key,
+      services: Map.keys(config.push || %{})
+    })
+  end
+
+  defp handle(:devices, conn, config, recipient),
+    do:
+      json(conn, 200, %{devices: Enum.map(Chime.Devices.list(config, recipient), &device_json/1)})
+
+  defp handle(:register_device, conn, config, recipient) do
+    {body, conn} = body(conn)
+
+    case Chime.Devices.register(
+           config,
+           recipient,
+           Map.take(body, ["kind", "token", "keys", "name"])
+         ) do
+      {:ok, device} -> json(conn, 201, %{device: device_json(device)})
+      {:error, code} -> json(conn, 422, %{error: Atom.to_string(code)})
+    end
+  end
+
+  defp handle(:update_device, conn, config, recipient) do
+    {body, conn} = body(conn)
+
+    changes =
+      for {"enabled", v} when is_boolean(v) <- body, into: %{}, do: {:enabled, v}
+
+    changes =
+      case body["name"] do
+        name when is_binary(name) -> Map.put(changes, :name, String.slice(name, 0, 255))
+        _ -> changes
+      end
+
+    case Chime.Devices.update(config, recipient, conn.path_params["device"], changes) do
+      {:ok, device} -> json(conn, 200, %{device: device_json(device)})
+      {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
+    end
+  end
+
+  defp handle(:remove_device, conn, config, recipient) do
+    case Chime.Devices.remove(config, recipient, conn.path_params["device"]) do
+      :ok -> json(conn, 200, %{removed: true})
+      {:error, :not_found} -> json(conn, 404, %{error: "not_found"})
+    end
+  end
+
   defp handle(:preferences, conn, config, recipient),
-    do: json(conn, 200, preferences_json(config, recipient))
+    do: json(conn, 200, preferences_json(conn, config, recipient))
 
   defp handle(:put_preferences, conn, config, recipient) do
     {body, conn} = body(conn)
@@ -194,12 +303,12 @@ defmodule Chime.API do
 
     result =
       config.repo.transaction(fn ->
-        Enum.each(changes, &put_preference(config, recipient, &1))
+        Enum.each(changes, &put_preference(config, recipient, ws(conn), &1))
       end)
 
     case result do
       {:ok, _} ->
-        json(conn, 200, preferences_json(config, recipient))
+        json(conn, 200, preferences_json(conn, config, recipient))
 
       {:error, {code, category, channel}} ->
         json(conn, 422, %{error: Atom.to_string(code), category: category, channel: channel})
@@ -221,7 +330,7 @@ defmodule Chime.API do
       |> put_resp_header("x-accel-buffering", "no")
       |> send_chunked(200)
 
-    case event(conn, "counts", Counts.get(config, recipient)) do
+    case event(conn, "counts", Counts.get(config, recipient, ws(conn))) do
       {:ok, conn} -> stream(conn)
       {:error, _closed} -> conn
     end
@@ -231,7 +340,7 @@ defmodule Chime.API do
   defp stream(conn) do
     receive do
       {Chime, kind, counts} when kind in [:notified, :updated] ->
-        continue(conn, event(conn, Atom.to_string(kind), counts))
+        continue(conn, event(conn, Atom.to_string(kind), Counts.scope(counts, ws(conn))))
 
       {__MODULE__, :close} ->
         conn
@@ -245,22 +354,42 @@ defmodule Chime.API do
 
   defp event(conn, name, data), do: chunk(conn, "event: #{name}\ndata: #{JSON.encode!(data)}\n\n")
 
+  defp device_json(device) do
+    %{
+      id: device.id,
+      kind: device.kind,
+      name: device.name,
+      enabled: device.enabled,
+      lastUsedAt: device.last_used_at,
+      insertedAt: device.inserted_at
+    }
+  end
+
   # A change of the preferences, or the transaction's rollback.
-  defp put_preference(config, recipient, {category, channel, setting}) do
-    case Preferences.put(config, recipient, category, channel, setting) do
+  defp put_preference(config, recipient, workspace, {category, channel, setting}) do
+    case Preferences.put(config, recipient, category, channel, setting, workspace) do
       :ok -> :ok
       {:error, code} -> config.repo.rollback({code, category, channel})
     end
   end
 
-  defp preferences_json(config, recipient) do
+  defp mark(conn, config, recipient, action, ids) do
+    config
+    |> Feed.mark(recipient, action, ids, ws(conn))
+    |> Counts.scope(ws(conn))
+  end
+
+  defp preferences_json(conn, config, recipient) do
     %{
       categories:
-        Enum.map(Preferences.for_recipient(config, recipient), fn %{category: c, settings: s} ->
+        Enum.map(Preferences.for_recipient(config, recipient, ws(conn)), fn %{
+                                                                              category: c,
+                                                                              settings: s
+                                                                            } ->
           %{
             key: c.key,
-            label: c.label,
-            description: c.description,
+            label: Messages.t(c.label),
+            description: c.description && Messages.t(c.description),
             required: c.required,
             settings: s
           }

@@ -78,6 +78,102 @@ notification once, however many times they are in the list.
 Chime.notify(MyApp.Notifications.PaymentFailed, %{invoice: invoice}, to: invoice.user)
 ```
 
+Nobody is told of what they did: the actor (`actor/1`) is left out of the
+recipients, unless the notifier says otherwise (`notify_actor: true`).
+
+## Actions
+
+`feed/2` can offer buttons, and `act/3` takes them:
+
+```elixir
+@impl true
+def feed(data, %{action: nil}) do
+  %{
+    title: "#{data["inviter"]} invited you to #{data["team"]}",
+    actions: [%{key: "accept", label: "Accept"}, %{key: "decline", label: "Decline"}]
+  }
+end
+
+def feed(data, %{action: action}), do: %{title: "You #{action}ed the invitation to #{data["team"]}"}
+
+@impl true
+def act("accept", data, notification), do: MyApp.Teams.join(data["team_id"], notification.recipient) |> then(fn _ -> {:ok, "/teams/#{data["team_id"]}"} end)
+def act("decline", _data, _notification), do: :ok
+```
+
+`Chime.act/3` (and the feed's buttons in LiveView, and `POST
+/:id/actions/:action` of the JSON API) calls `act/3`. When it says `:ok`
+or `{:ok, url}`, the notification keeps the action (`notification.action`)
+and is read; the person goes to `url`. An error leaves it as it was.
+
+## Previews
+
+`preview/0` gives the params to see the notifier with, in the admin's
+previews (see [The admin](admin.md)): one example, or `{name, params}`
+for more. They go through your `data/1` and `actor/1`, so plain maps of
+what those read are enough:
+
+```elixir
+@impl true
+def preview do
+  [
+    {"A comment", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: "Lovely.", author: %{id: 7, name: "Ana"}}}},
+    {"A long one", %{comment: %{story_id: 1, story: %{title: "Tokyo"}, text: String.duplicate("Lovely. ", 40), author: %{id: 7, name: "Ana"}}}}
+  ]
+end
+```
+
+## Guards
+
+Your app's rules about who may be told: "may this member read the
+channel?", "is this person blocked?". `notify?/2` is checked for each
+person when the notification comes, with the params and the person as
+the resolver gives them. A person it says no to gets nothing, by any
+channel:
+
+```elixir
+@impl true
+def notify?(%{message: message}, recipient), do: MyApp.Channels.member?(message.channel_id, recipient.id)
+```
+
+Each channel has its own guard too, `:if` and `:unless` (see Channels,
+below): the feed's are checked when the notification comes, the others'
+at their time. A notification kept out of the feed by its guard, or by
+the person's preferences, is in the log with the reason.
+
+## A base for your notifiers
+
+Notifiers that share channels, guards or defaults can share a module of
+yours, as Rails apps have an `ApplicationNotifier`:
+
+```elixir
+defmodule MyApp.Notifier do
+  defmacro __using__(opts) do
+    quote do
+      use Chime.Notifier, unquote(opts)
+
+      deliver :feed, if: :can_read?
+
+      def can_read?(data, recipient), do: MyApp.Access.can_read?(recipient.id, data["channel_id"])
+
+      @impl Chime.Notifier
+      def notify?(_params, recipient), do: not MyApp.Accounts.suspended?(recipient.id)
+
+      defoverridable notify?: 2
+    end
+  end
+end
+
+defmodule MyApp.Notifications.ChannelMessage do
+  use MyApp.Notifier, category: :messages
+
+  deliver :email, wait: {1, :minute}
+  ...
+end
+```
+
+`defoverridable` lets a notifier write its own guard over the base's.
+
 ## What is kept
 
 `data/1` is what is kept of the params, as JSON: strings, numbers,
@@ -101,9 +197,10 @@ it is unseen again, and it comes to the top of the feed. A read, an
 archive, or the end of the window closes it: the next event is a new
 notification.
 
-`Chime.actors/1` says the actors in English ("Ana", "Ana and Rui", "Ana
-and 4 others"); an app in other languages writes its own from
-`notification.actors`.
+`Chime.actors/1` says the actors ("Ana", "Ana and Rui", "Ana and 4
+others") in your app's languages (see [Languages](languages.md)); an
+app can write its own from `notification.actors` and
+`notification.actor_count`.
 
 While a group's email waits (`wait:`), the events that join the group go
 with it: one email, as the group is when it goes, not one for each.
@@ -112,7 +209,8 @@ with it: one email, as the group is when it goes, not one for each.
 
 `deliver/2` declares a channel, in the order they go:
 
-* `deliver :feed` - the feed, at once. It takes no options.
+* `deliver :feed` - the feed, at once. It takes `:if` and `:unless` of
+  the notifier's functions, checked then.
 * `deliver :email` - by the app's mailer, with `email/3`.
 * `deliver :telegram` - a channel of the app's config (`Chime.Channel`),
   which calls the notifier's function of its name, `telegram/3`, when it
@@ -133,13 +231,75 @@ conditions, the person's preferences then, the person themselves
 (`recipients/1` of the resolver: a person who left gets nothing). Each
 decision is written in the log, with its reason (see [The log](explain.md)).
 
+## Later, and cancelled
+
+`:at` sends a notification at a time instead of now:
+
+```elixir
+Chime.notify(MyApp.Notifications.TrialEnding, %{user: user}, to: user, at: trial_ends_at |> DateTime.add(-3, :day), key: "trial:#{user.id}")
+```
+
+The event is `"scheduled"` and a job notifies its people at its time.
+Who they are, and the guard (`notify?/2`), are decided now; the feed,
+the preferences and the channels then.
+
+`Chime.cancel/2` takes the idempotency key (or the event):
+
+```elixir
+# The comment was deleted: don't email about it.
+Chime.cancel("comment:#{comment.id}")
+
+# ...and take it out of the feeds.
+Chime.cancel("comment:#{comment.id}", feed: :remove)
+```
+
+A scheduled event is then not sent. A sent one has its deliveries that
+wait skipped, with "the notification was cancelled" in the log; with
+`feed: :remove`, its notifications leave the feeds, but those of a group
+that holds other events too.
+
 ## Many people
 
 `Chime.notify/3` inserts the notifications in batches of 1000, each its
 own transaction; the first is the event's, so that a call with an
-idempotency key that was made already does nothing. One event to many
-people is best sent from a job of your app, which Oban retries with the
-same key.
+idempotency key that was made already does nothing.
+
+For everyone, or any audience too large for a list, a notifier gives a
+query of your app's instead of `recipients/1`:
+
+```elixir
+defmodule MyApp.Notifications.Announcement do
+  use Chime.Notifier, category: :news
+
+  import Ecto.Query
+
+  deliver :feed
+  deliver :email, wait: {1, :hour}
+
+  @impl true
+  def audience(%{"plan" => plan}), do: from(u in MyApp.User, where: u.plan == ^plan and not is_nil(u.confirmed_at))
+  def audience(_data), do: from(u in MyApp.User, where: not is_nil(u.confirmed_at))
+
+  @impl true
+  def recipient_id(id), do: "user:#{id}"
+  ...
+end
+
+Chime.notify(MyApp.Notifications.Announcement, %{"title" => "We moved", "plan" => "pro"})
+```
+
+The call returns at once, with the event `"sending"`. Oban jobs go
+through the query 1000 people a page, by the key of its first binding
+(`:id`, or `audience_key:` of `use`), each page with the next page's job
+in its transaction, so that a page is done once whatever happens. The
+query is made from the event's data (`audience/1` gets the data, not the
+params), and `recipient_id/1` makes each key a person's id. When the
+last page is done, the event is `"sent"` with its count of people.
+
+The guard (`notify?/2`) is not asked of an audience: its people are the
+query's. The feed's conditions and each channel's are. `Chime.cancel/2`
+stops the pages that are left; with `feed: :remove`, the notifications
+of the pages done go too.
 
 ## In a transaction of your app
 

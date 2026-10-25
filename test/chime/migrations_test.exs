@@ -23,7 +23,7 @@ defmodule Chime.MigrationsTest do
     MigrationsTest.up(repo, Chime.Migrations, version: 1)
 
     assert tables(repo) ==
-             ~w(chime_counts chime_deliveries chime_events chime_notifications chime_preferences)
+             ~w(chime_counts chime_deliveries chime_devices chime_events chime_notifications chime_preferences)
 
     MigrationsTest.down(repo, Chime.Migrations, to: 0)
     assert tables(repo) == []

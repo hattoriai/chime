@@ -32,25 +32,34 @@ defmodule Chime.Preferences do
         }
 
   @doc false
-  # The settings people kept for a category, of these people, by person:
-  # %{recipient => %{channel => {setting, updated_at}}}.
-  @spec stored(Config.t(), [String.t()], String.t()) :: %{String.t() => map()}
-  def stored(%Config{} = config, ids, category) do
+  # The settings people kept for a category, of these people, by person,
+  # in a workspace (nil for none): %{recipient => %{key => {setting,
+  # updated_at}}}, the key telling which setting it is (setting/4).
+  @spec stored(Config.t(), [String.t()], String.t(), String.t() | nil) :: %{String.t() => map()}
+  def stored(%Config{} = config, ids, category, workspace \\ nil) do
     from(p in Preference,
-      where: p.recipient in ^ids and p.category in [^category, @all],
-      select: {p.recipient, p.category, p.channel, p.setting, p.updated_at}
+      where:
+        p.recipient in ^ids and p.category in [^category, @all] and
+          p.workspace in ^Enum.uniq(["", workspace || ""]),
+      select: {p.recipient, p.workspace, p.category, p.channel, p.setting, p.updated_at}
     )
     |> config.repo.all(prefix: config.prefix)
-    |> Enum.reduce(%{}, fn {recipient, cat, channel, setting, at}, acc ->
-      # A category's own setting comes before the setting for all.
-      key = if cat == @all, do: {:all, channel}, else: channel
+    |> Enum.reduce(%{}, fn {recipient, ws, cat, channel, setting, at}, acc ->
+      key = key(ws, cat, channel)
       Map.update(acc, recipient, %{key => {setting, at}}, &Map.put(&1, key, {setting, at}))
     end)
   end
 
+  defp key("", @all, channel), do: {:all, channel}
+  defp key("", _category, channel), do: channel
+  defp key(_workspace, @all, channel), do: {:workspace_all, channel}
+  defp key(_workspace, _category, channel), do: {:workspace, channel}
+
   @doc false
   # A person's setting of a channel for a category, from what they kept
-  # (stored/3): {setting, kept_at}, kept_at nil for a default.
+  # (stored/4): {setting, kept_at}, kept_at nil for a default. The
+  # workspace's own setting of the category comes first, then the
+  # workspace's for all, then the category's, then the one for all.
   @spec setting(Config.category(), boolean(), map(), String.t()) ::
           {String.t(), DateTime.t() | nil}
   def setting(category, required?, kept, channel)
@@ -58,35 +67,37 @@ defmodule Chime.Preferences do
   def setting(_category, true, _kept, _channel), do: {"on", nil}
 
   def setting(category, false, kept, channel) do
-    case kept do
-      %{^channel => kept} -> kept
-      %{{:all, ^channel} => kept} -> kept
-      _ -> {Map.get(category.defaults, channel, "on"), nil}
-    end
+    Enum.find_value(
+      [{:workspace, channel}, {:workspace_all, channel}, channel, {:all, channel}],
+      {Map.get(category.defaults, channel, "on"), nil},
+      &Map.get(kept, &1)
+    )
   end
 
-  @doc "A person's settings, for each category of the config."
-  @spec for_recipient(Config.t(), String.t()) :: [t()]
-  def for_recipient(%Config{categories: nil}, _recipient), do: []
+  @doc """
+  A person's settings, for each category of the config: in a workspace,
+  its own where the person set them, else their settings for all.
+  """
+  @spec for_recipient(Config.t(), String.t(), String.t() | nil) :: [t()]
+  def for_recipient(config, recipient, workspace \\ nil)
+  def for_recipient(%Config{categories: nil}, _recipient, _workspace), do: []
 
-  def for_recipient(%Config{} = config, recipient) when is_binary(recipient) do
+  def for_recipient(%Config{} = config, recipient, workspace) when is_binary(recipient) do
     channels = Config.channel_names(config)
 
     kept =
       from(p in Preference,
-        where: p.recipient == ^recipient,
-        select: {p.category, p.channel, p.setting, p.updated_at}
+        where: p.recipient == ^recipient and p.workspace in ^Enum.uniq(["", workspace || ""]),
+        select: {p.workspace, p.category, p.channel, p.setting, p.updated_at}
       )
       |> config.repo.all(prefix: config.prefix)
-      |> Enum.group_by(&elem(&1, 0), fn {_cat, channel, setting, at} ->
-        {channel, {setting, at}}
-      end)
-
-    all = for {channel, kept} <- Map.get(kept, @all, []), into: %{}, do: {{:all, channel}, kept}
 
     Enum.map(config.categories, fn category ->
-      own = Map.new(Map.get(kept, category.key, []))
-      kept = Map.merge(all, own)
+      kept =
+        for {ws, cat, channel, setting, at} <- kept,
+            cat in [category.key, @all],
+            into: %{},
+            do: {key(ws, cat, channel), {setting, at}}
 
       %{
         category: category,
@@ -100,55 +111,73 @@ defmodule Chime.Preferences do
   end
 
   @doc """
-  Changes a person's setting of a channel for a category. Errors:
-  `:required` (the category is required), `:unknown_category`,
-  `:unknown_channel`, `:invalid_setting` (a setting that is not `"on"` or
-  `"off"`, or `"daily"` or `"weekly"` for email).
+  Changes a person's setting of a channel for a category, for every
+  workspace, or for one (`workspace`). Errors: `:required` (the category
+  is required), `:unknown_category`, `:unknown_channel`,
+  `:invalid_setting` (a setting that is not `"on"` or `"off"`, or
+  `"daily"` or `"weekly"` for email).
   """
-  @spec put(Config.t(), String.t(), String.t(), String.t(), String.t()) ::
+  @spec put(Config.t(), String.t(), String.t(), String.t(), String.t(), String.t() | nil) ::
           :ok | {:error, :required | :unknown_category | :unknown_channel | :invalid_setting}
-  def put(%Config{} = config, recipient, category, channel, setting)
+  def put(%Config{} = config, recipient, category, channel, setting, workspace \\ nil)
       when is_binary(recipient) do
     with {:ok, spec} <- category(config, category),
          :ok <- check_channel(config, channel),
          :ok <- check_setting(channel, setting) do
       if spec.required,
         do: {:error, :required},
-        else: write(config, recipient, category, channel, setting)
+        else: write(config, recipient, workspace || "", category, channel, setting)
     end
   end
 
   @doc false
   # The link to unsubscribe of an email: its category off by email; of a
-  # digest ("*"), email off for every category.
+  # digest ("*"), email off for every category. In every workspace: the
+  # workspaces' own settings of it go.
   @spec unsubscribe(Config.t(), String.t(), String.t()) :: :ok
   def unsubscribe(%Config{} = config, recipient, @all) do
     config.repo.transaction(fn ->
       from(p in Preference, where: p.recipient == ^recipient and p.channel == "email")
       |> config.repo.delete_all(prefix: config.prefix)
 
-      write(config, recipient, @all, "email", "off")
+      write(config, recipient, "", @all, "email", "off")
     end)
 
     :ok
   end
 
   def unsubscribe(%Config{} = config, recipient, category) do
-    case config.categories && Config.category(config, category) do
-      %{required: true} -> :ok
-      _ -> write(config, recipient, category, "email", "off")
+    required? =
+      try do
+        config.categories != nil and Config.category(config, category).required
+      rescue
+        # A category the config no longer has: the setting is kept all the same.
+        ArgumentError -> false
+      end
+
+    unless required? do
+      config.repo.transaction(fn ->
+        from(p in Preference,
+          where:
+            p.recipient == ^recipient and p.channel == "email" and p.category == ^category and
+              p.workspace != ""
+        )
+        |> config.repo.delete_all(prefix: config.prefix)
+
+        write(config, recipient, "", category, "email", "off")
+      end)
     end
-  rescue
-    # A category the config no longer has: the setting is kept all the same.
-    ArgumentError -> write(config, recipient, category, "email", "off")
+
+    :ok
   end
 
-  defp write(config, recipient, category, channel, setting) do
+  defp write(config, recipient, workspace, category, channel, setting) do
     config.repo.insert_all(
       Preference,
       [
         %{
           recipient: recipient,
+          workspace: workspace,
           category: category,
           channel: channel,
           setting: setting,
@@ -156,7 +185,7 @@ defmodule Chime.Preferences do
         }
       ],
       on_conflict: {:replace, [:setting, :updated_at]},
-      conflict_target: [:recipient, :category, :channel],
+      conflict_target: [:recipient, :workspace, :category, :channel],
       prefix: config.prefix
     )
 

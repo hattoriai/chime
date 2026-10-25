@@ -1,7 +1,7 @@
 # Channels
 
-A channel is a way to tell a person. Chime has two: the feed and email.
-Your app adds its own.
+A channel is a way to tell a person. Chime has the feed, email, and push
+(see [Push](push.md)). Your app adds its own.
 
 ## The feed
 
@@ -26,6 +26,21 @@ as a `Swoosh.Email`; Chime gives it:
 
 The mailer's id of the email is kept as the delivery's `ref`.
 
+## Read everywhere
+
+A link of an email that opens the notification reads it in the feed too:
+
+```elixir
+~s(<a href="#{Chime.link(notification, "/stories/42")}">Read it</a>)
+```
+
+`Chime.link/2` is an address of `chime_mail`, signed: opened, it marks
+the notification read and its `clicked_at`, tells the person's open
+pages, and redirects to the address (a path goes on the config's
+`:url`). Each email has the link of the feed's `:url` in its assigns, as
+`:link`, and the digests' links are such links. A channel of yours can
+use `Chime.link/2` the same way.
+
 A notifier's email in your app's templates:
 
 ```elixir
@@ -40,6 +55,46 @@ def email(data, recipient, notification) do
   )
 end
 ```
+
+## Slack, Discord, Teams, webhooks and SMS
+
+Chime has these too, each a module you name in the config, with its
+options:
+
+```elixir
+{Chime, ...,
+ channels: [
+   slack: {Chime.Channels.Slack, token: System.fetch_env!("SLACK_BOT_TOKEN")},
+   discord: {Chime.Channels.Discord, to: System.fetch_env!("DISCORD_WEBHOOK_URL")},
+   teams: {Chime.Channels.Teams, to: System.fetch_env!("TEAMS_WEBHOOK_URL")},
+   webhook: {Chime.Channels.Webhook, to: "https://hooks.myapp.com/chime", secret: System.fetch_env!("CHIME_WEBHOOK_SECRET")},
+   sms:
+     {Chime.Channels.Twilio,
+      account_sid: System.fetch_env!("TWILIO_ACCOUNT_SID"),
+      auth_token: System.fetch_env!("TWILIO_AUTH_TOKEN"),
+      from: "+15551234567"}
+ ]}
+```
+
+| Module | Where it writes |
+| --- | --- |
+| `Chime.Channels.Slack` | with a bot's `:token`, `chat.postMessage` to the person's Slack id (`data.slack`) or a channel (`to: "#ops"`); without, an incoming webhook's URL |
+| `Chime.Channels.Discord` | a channel's webhook URL: `to:` for everyone, or `data.discord` |
+| `Chime.Channels.Teams` | a workflow's or an incoming webhook's URL, as an Adaptive Card |
+| `Chime.Channels.Webhook` | your address, the notification as JSON, signed with `:secret` (`x-chime-signature`) |
+| `Chime.Channels.Twilio` | the person's phone (`data.phone`, E.164), from `:from` or a `:messaging_service_sid` |
+
+A person's address is in their recipient's data, under the channel's name
+(`to: {:data, :key}` for another key), or one address for everyone with
+`to: "..."`: Slack and Discord for your team's own alerts, for example.
+A person with none is skipped, and the log says so.
+
+Each says the notifier's function of the channel's name when it has one
+(`slack/3`, `sms/3`: a text, or `%{title:, body:, url:}`), else the
+feed's words, with the link that reads the notification. A refusal that
+will not change (an address gone, a number that replied STOP) is
+skipped; the rest is tried again. They send with `Req`: add
+`{:req, "~> 0.5"}` to your deps.
 
 ## Your own
 
@@ -92,6 +147,41 @@ before `deliver/2` is called.
 
 A channel is in the preferences too: a person can turn it off for a
 category, as the feed and email.
+
+## Rules
+
+Some rules hold a delivery for later. They are decided at its time, and
+the log says what held it:
+
+```elixir
+# Quick messages go as one email, a minute after the last (at most 5
+# after the first); no more than one email of a conversation in 15 minutes.
+deliver :email, wait: {1, :minute}, debounce: true, max_wait: {5, :minute}, throttle: {15, :minute}
+```
+
+* `throttle:` - at most one by the channel for a group (or, with no
+  group, for the notifier) in a time. One that comes sooner waits for
+  the end of it, and goes as the group is then.
+* `debounce: true` - with `wait:`, each event that joins the group moves
+  the delivery's time to `wait` after it, so a quick run goes as one;
+  `max_wait:` is the most it waits from the first.
+* Quiet hours, in the config, in each person's time zone: nothing but the
+  feed goes in them, and what comes waits for the morning. A person's own
+  (`:quiet_hours` of their `Chime.Recipient`, or `false` for none) comes
+  first; a channel with `quiet: false` goes all the same.
+
+  ```elixir
+  {Chime, ..., quiet_hours: {22, 8}}
+  ```
+
+* Limits, in the config: the most each person gets by a channel in a
+  time. One past it waits until they are under it again.
+
+  ```elixir
+  {Chime, ..., limits: [email: {5, :hour}, sms: {3, :day}]}
+  ```
+
+Required notifications are held by none of them.
 
 ## When it goes
 

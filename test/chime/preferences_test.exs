@@ -87,7 +87,7 @@ defmodule Chime.PreferencesTest do
     test "a link to unsubscribe turns off its category's email" do
       ana = person!(1)
       url = Chime.unsubscribe_url(ana |> ChimeTest.Resolver.recipient(), "comments")
-      "https://app.test/notifications/unsubscribe/" <> token = url
+      "https://app.test/notifications/mail/unsubscribe/" <> token = url
 
       assert {:ok, "user:1", "comments"} =
                Chime.Token.verify_unsubscribe(Chime.Config.get(), token)

@@ -11,7 +11,7 @@
 # reachable (CHIME_TEST_DATABASE_URL, or postgres:postgres@localhost).
 File.mkdir_p!(Path.expand("../tmp", __DIR__))
 
-migrations = [{0, ChimeTest.ObanMigration}, {1, ChimeTest.Migration}]
+migrations = [{0, ChimeTest.ObanMigration}, {1, ChimeTest.Migration}, {2, ChimeTest.AppMigration}]
 migrate = fn repo -> Ecto.Migrator.run(repo, migrations, :up, all: true, log: false) end
 
 File.rm(Path.expand("../tmp/chime_test.sqlite3", __DIR__))

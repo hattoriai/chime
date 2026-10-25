@@ -31,3 +31,26 @@ defmodule ChimeTest.PostgresMigrationsRepo do
   @moduledoc "A repo on PostgreSQL with no sandbox, for the checks of the migrations in a prefix."
   use Ecto.Repo, otp_app: :chime, adapter: Ecto.Adapters.Postgres
 end
+
+defmodule ChimeTest.AppMigration do
+  @moduledoc false
+  # The app's own table of the tests: its users, for the audiences.
+  use Ecto.Migration
+
+  def change do
+    create table(:test_users) do
+      add :name, :string
+      add :confirmed, :boolean, null: false, default: true
+    end
+  end
+end
+
+defmodule ChimeTest.UserRow do
+  @moduledoc "A user of the app's table of the tests."
+  use Ecto.Schema
+
+  schema "test_users" do
+    field :name, :string
+    field :confirmed, :boolean, default: true
+  end
+end

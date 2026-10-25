@@ -1,0 +1,17 @@
+{
+  "name": "chime-assets",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/react": "19.1.8",
+    "esbuild": "0.25.8",
+    "typescript": "5.8.3"
+  }
+}

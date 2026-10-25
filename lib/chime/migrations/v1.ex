@@ -13,9 +13,17 @@ defmodule Chime.Migrations.V1 do
       add :category, :string, size: 120, null: false
       add :data, :map, null: false
       add :actor, :map
+      add :workspace, :string, size: 255
       add :group_key, :string, size: 255
       add :key, :string, size: 255
       add :recipients, :integer, null: false, default: 0
+      # "sent", or "scheduled" until its time (with its people kept in
+      # audience), or "cancelled" before it.
+      add :status, :string, size: 16, null: false, default: "sent"
+      add :scheduled_at, :utc_datetime_usec
+      add :audience, {:array, :string}
+      # With the notifier's audience/1: the key of the last person done.
+      add :cursor, :string, size: 255
       add :inserted_at, :utc_datetime_usec, null: false
     end
 
@@ -33,6 +41,7 @@ defmodule Chime.Migrations.V1 do
 
       add :kind, :string, size: 120, null: false
       add :category, :string, size: 120, null: false
+      add :workspace, :string, size: 255
       add :group_key, :string, size: 255
       # Open to the events of its group, until grouped_until or a read.
       add :grouping, :boolean, null: false, default: false
@@ -44,11 +53,17 @@ defmodule Chime.Migrations.V1 do
       add :seen_at, :utc_datetime_usec
       add :read_at, :utc_datetime_usec
       add :archived_at, :utc_datetime_usec
+      # Opened from a link of an email or a channel (Chime.link/2).
+      add :clicked_at, :utc_datetime_usec
+      # The action the person took on it, and when (Chime.act/3).
+      add :action, :string, size: 64
+      add :acted_at, :utc_datetime_usec
       timestamps(type: :utc_datetime_usec)
     end
 
     # The feed, newest first.
     create index(:chime_notifications, [:recipient, :updated_at], prefix: ctx.prefix)
+    create index(:chime_notifications, [:recipient, :workspace, :updated_at], prefix: ctx.prefix)
     create index(:chime_notifications, [:event_id], prefix: ctx.prefix)
     create index(:chime_notifications, [:inserted_at], prefix: ctx.prefix)
 
@@ -93,8 +108,28 @@ defmodule Chime.Migrations.V1 do
              prefix: ctx.prefix
            )
 
+    # Each person's devices, for the :push channel: a browser's Web Push
+    # subscription, or a phone's APNs or FCM token.
+    create table(:chime_devices, primary_key: false, prefix: ctx.prefix) do
+      add :id, :binary_id, primary_key: true
+      add :recipient, :string, size: 255, null: false
+      add :kind, :string, size: 16, null: false
+      add :token, :text, null: false
+      add :keys, :map
+      add :name, :string, size: 255
+      add :enabled, :boolean, null: false, default: true
+      add :last_used_at, :utc_datetime_usec
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create index(:chime_devices, [:recipient], prefix: ctx.prefix)
+    # A token is one device, of whoever registered it last.
+    create unique_index(:chime_devices, [:kind, :token], prefix: ctx.prefix)
+
     create table(:chime_preferences, primary_key: false, prefix: ctx.prefix) do
       add :recipient, :string, size: 255, primary_key: true
+      # "" for every workspace, else the workspace's own setting.
+      add :workspace, :string, size: 255, primary_key: true, default: ""
       add :category, :string, size: 120, primary_key: true
       add :channel, :string, size: 64, primary_key: true
       add :setting, :string, size: 16, null: false
@@ -103,6 +138,8 @@ defmodule Chime.Migrations.V1 do
 
     create table(:chime_counts, primary_key: false, prefix: ctx.prefix) do
       add :recipient, :string, size: 255, primary_key: true
+      # "" for the whole feed, else a workspace's part of it.
+      add :workspace, :string, size: 255, primary_key: true, default: ""
       add :unseen, :integer, null: false, default: 0
       add :unread, :integer, null: false, default: 0
       add :updated_at, :utc_datetime_usec, null: false
@@ -111,6 +148,7 @@ defmodule Chime.Migrations.V1 do
 
   def down(ctx) do
     drop table(:chime_counts, prefix: ctx.prefix)
+    drop table(:chime_devices, prefix: ctx.prefix)
     drop table(:chime_preferences, prefix: ctx.prefix)
     drop table(:chime_deliveries, prefix: ctx.prefix)
     drop table(:chime_notifications, prefix: ctx.prefix)

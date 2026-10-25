@@ -23,6 +23,7 @@ defmodule Chime.Token do
 
   @reader "chime reader"
   @unsubscribe "chime unsubscribe"
+  @open "chime open"
   @max_age 86_400
 
   @doc "A token of a person, by their id."
@@ -54,14 +55,42 @@ defmodule Chime.Token do
 
   @doc false
   # The address to unsubscribe a person from a category's emails ("*" for
-  # all), or nil without the config's :unsubscribe_url and secret.
+  # all), or nil without the config's :mail_url and secret.
   @spec unsubscribe_url(Config.t(), String.t(), String.t()) :: String.t() | nil
-  def unsubscribe_url(%Config{unsubscribe_url: nil}, _recipient, _category), do: nil
+  def unsubscribe_url(%Config{mail_url: nil}, _recipient, _category), do: nil
   def unsubscribe_url(%Config{secret_key_base: nil}, _recipient, _category), do: nil
 
   def unsubscribe_url(%Config{} = config, recipient, category) do
     token = Phoenix.Token.sign(config.secret_key_base, @unsubscribe, [recipient, category])
-    config.unsubscribe_url <> "/" <> token
+    config.mail_url <> "/unsubscribe/" <> token
+  end
+
+  @doc false
+  # A link that opens a notification: read, then the address. nil without
+  # the config's :mail_url and secret.
+  @spec open_url(Config.t(), Ecto.UUID.t(), String.t(), String.t()) :: String.t() | nil
+  def open_url(%Config{mail_url: nil}, _id, _recipient, _url), do: nil
+  def open_url(%Config{secret_key_base: nil}, _id, _recipient, _url), do: nil
+
+  def open_url(%Config{} = config, id, recipient, url) do
+    token = Phoenix.Token.sign(config.secret_key_base, @open, [id, recipient, url])
+    config.mail_url <> "/open/" <> token
+  end
+
+  @doc false
+  @spec verify_open(Config.t(), String.t()) ::
+          {:ok, Ecto.UUID.t(), String.t(), String.t()} | :error
+  def verify_open(%Config{secret_key_base: nil}, _token), do: :error
+
+  def verify_open(%Config{} = config, token) do
+    case Phoenix.Token.verify(config.secret_key_base, @open, token, max_age: :infinity) do
+      {:ok, [id, recipient, url]}
+      when is_binary(id) and is_binary(recipient) and is_binary(url) ->
+        {:ok, id, recipient, url}
+
+      _ ->
+        :error
+    end
   end
 
   @doc false
