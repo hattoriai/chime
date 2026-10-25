@@ -207,3 +207,61 @@ defmodule ChimeTest.InTeam do
   @impl true
   def feed(_data, _notification), do: %{title: "In a team"}
 end
+
+defmodule ChimeTest.Notifier do
+  @moduledoc """
+  The app's base of its notifiers, as an ApplicationNotifier: the feed for
+  all, a guard every notifier has, and its own defaults.
+  """
+  defmacro __using__(opts) do
+    quote do
+      use Chime.Notifier, unquote(opts)
+
+      deliver :feed, if: :can_read?
+
+      # Who may read the channel: the people of the test's list.
+      def can_read?(data, recipient), do: recipient.id in Map.get(data, "members", [recipient.id])
+
+      @impl Chime.Notifier
+      def notify?(params, recipient), do: recipient.id not in Map.get(params, :blocked, [])
+
+      defoverridable notify?: 2
+    end
+  end
+end
+
+defmodule ChimeTest.ChannelMessage do
+  @moduledoc "A notifier of the tests on the app's base."
+  use ChimeTest.Notifier, category: :comments
+
+  deliver :email, wait: {1, :minute}
+
+  @impl true
+  def recipients(%{to: to}), do: to
+
+  @impl true
+  def data(%{members: members} = params), do: %{"text" => params.text, "members" => members}
+  def data(params), do: %{"text" => params.text}
+
+  @impl true
+  def actor(%{author: author}), do: %{"id" => author, "name" => author}
+
+  @impl true
+  def feed(data, _notification), do: %{title: data["text"]}
+
+  @impl true
+  def email(data, _recipient, _notification), do: Swoosh.Email.new(subject: data["text"])
+end
+
+defmodule ChimeTest.SelfToo do
+  @moduledoc "A notifier of the tests that tells its actor too."
+  use Chime.Notifier, category: :comments, notify_actor: true
+
+  deliver :feed
+
+  @impl true
+  def actor(%{author: author}), do: %{"id" => author, "name" => author}
+
+  @impl true
+  def feed(_data, _notification), do: %{title: "You did it"}
+end

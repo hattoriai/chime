@@ -78,6 +78,60 @@ notification once, however many times they are in the list.
 Chime.notify(MyApp.Notifications.PaymentFailed, %{invoice: invoice}, to: invoice.user)
 ```
 
+Nobody is told of what they did: the actor (`actor/1`) is left out of the
+recipients, unless the notifier says otherwise (`notify_actor: true`).
+
+## Guards
+
+Your app's rules about who may be told: "may this member read the
+channel?", "is this person blocked?". `notify?/2` is checked for each
+person when the notification comes, with the params and the person as
+the resolver gives them. A person it says no to gets nothing, by any
+channel:
+
+```elixir
+@impl true
+def notify?(%{message: message}, recipient), do: MyApp.Channels.member?(message.channel_id, recipient.id)
+```
+
+Each channel has its own guard too, `:if` and `:unless` (see Channels,
+below): the feed's are checked when the notification comes, the others'
+at their time. A notification kept out of the feed by its guard, or by
+the person's preferences, is in the log with the reason.
+
+## A base for your notifiers
+
+Notifiers that share channels, guards or defaults can share a module of
+yours, as Rails apps have an `ApplicationNotifier`:
+
+```elixir
+defmodule MyApp.Notifier do
+  defmacro __using__(opts) do
+    quote do
+      use Chime.Notifier, unquote(opts)
+
+      deliver :feed, if: :can_read?
+
+      def can_read?(data, recipient), do: MyApp.Access.can_read?(recipient.id, data["channel_id"])
+
+      @impl Chime.Notifier
+      def notify?(_params, recipient), do: not MyApp.Accounts.suspended?(recipient.id)
+
+      defoverridable notify?: 2
+    end
+  end
+end
+
+defmodule MyApp.Notifications.ChannelMessage do
+  use MyApp.Notifier, category: :messages
+
+  deliver :email, wait: {1, :minute}
+  ...
+end
+```
+
+`defoverridable` lets a notifier write its own guard over the base's.
+
 ## What is kept
 
 `data/1` is what is kept of the params, as JSON: strings, numbers,
@@ -113,7 +167,8 @@ with it: one email, as the group is when it goes, not one for each.
 
 `deliver/2` declares a channel, in the order they go:
 
-* `deliver :feed` - the feed, at once. It takes no options.
+* `deliver :feed` - the feed, at once. It takes `:if` and `:unless` of
+  the notifier's functions, checked then.
 * `deliver :email` - by the app's mailer, with `email/3`.
 * `deliver :telegram` - a channel of the app's config (`Chime.Channel`),
   which calls the notifier's function of its name, `telegram/3`, when it

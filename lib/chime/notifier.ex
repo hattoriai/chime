@@ -61,13 +61,17 @@ defmodule Chime.Notifier do
     * `:required` - it goes whatever the person's preferences, and its
       emails have no link to unsubscribe (`false`; a category of
       `required: true` makes all its notifiers so).
+    * `:notify_actor` - whether the person who did it (`c:actor/1`) is
+      notified too, when they are among the recipients (`false`: nobody is
+      told of what they did).
     * `:group_window` - with `c:group/1`: how long a notification stays
       open to the events of its group, from the first (`{1, :hour}`).
 
   ## Channels
 
   `deliver/2` declares a channel, in the order they go: `:feed`, the
-  bell and its list in the app; `:email`, through the app's mailer; or
+  bell and its list in the app (decided when the notification comes, with
+  `:if` and `:unless` of the notifier's functions only); `:email`, through the app's mailer; or
   one of the app's `:channels` (`Chime.Channel`). Options:
 
     * `:wait` - how long after the notification it goes: `{10, :minute}`
@@ -140,6 +144,15 @@ defmodule Chime.Notifier do
   """
   @callback workspace(params()) :: String.t() | nil
 
+  @doc """
+  Whether a person is notified at all: the guard of the app's rules, such
+  as "may this person read the channel?", checked for each person when
+  the notification comes, with the params of `Chime.notify/3` and the
+  `Chime.Recipient` (as the resolver gives them). A person it says no to
+  gets nothing, by any channel. By default, everyone.
+  """
+  @callback notify?(params(), Chime.Recipient.t()) :: boolean()
+
   @doc "What the feed shows: `:title`, and `:body`, `:url` and `:icon`."
   @callback feed(data :: map(), Chime.Notification.t()) :: feed()
 
@@ -155,6 +168,7 @@ defmodule Chime.Notifier do
                       actor: 1,
                       group: 1,
                       workspace: 1,
+                      notify?: 2,
                       feed: 2,
                       email: 3
 
@@ -210,6 +224,7 @@ defmodule Chime.Notifier do
       def __chime__(:category), do: unquote(config.category)
       def __chime__(:kind), do: unquote(config.kind)
       def __chime__(:required), do: unquote(config.required)
+      def __chime__(:notify_actor), do: unquote(config.notify_actor)
       def __chime__(:group_window), do: unquote(config.group_window)
     end
   end
@@ -276,6 +291,7 @@ defmodule Chime.Notifier do
       category: category,
       kind: to_string(kind),
       required: Keyword.get(opts, :required, false) == true,
+      notify_actor: Keyword.get(opts, :notify_actor, false) == true,
       group_window: seconds(module, :group_window, Keyword.get(opts, :group_window, {1, :hour}))
     }
   end
@@ -291,8 +307,14 @@ defmodule Chime.Notifier do
               "deliver takes :wait, :if and :unless, got: #{inspect(Keyword.keys(other))}"
     end
 
-    if channel == :feed and (opts[:wait] || opts[:if] || opts[:unless]) do
-      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no condition"
+    if channel == :feed and opts[:wait] do
+      raise ArgumentError, "#{inspect(module)}: the feed goes at once, with no :wait"
+    end
+
+    if channel == :feed and Enum.any?(List.wrap(opts[:unless]), &(&1 in [:read, :seen])) do
+      raise ArgumentError,
+            "#{inspect(module)}: the feed is decided when the notification comes, " <>
+              "before it can be read or seen"
     end
 
     %{

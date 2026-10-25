@@ -28,7 +28,8 @@ defmodule Chime.Notify do
     deliveries = notifier.__chime__(:deliveries)
     Enum.each(deliveries, &check_channel(config, notifier, &1.channel))
 
-    ids = recipient_ids(config, notifier, params, opts)
+    actor = notifier.actor(params)
+    {ids, known} = recipients(config, notifier, params, opts, actor)
     kind = notifier.__chime__(:kind)
 
     workspace = workspace(notifier, params, opts)
@@ -41,20 +42,26 @@ defmodule Chime.Notify do
       category: category.key,
       workspace: workspace,
       data: notifier.data(params),
-      actor: notifier.actor(params),
+      actor: actor,
       group_key: group,
       key: opts[:key],
       recipients: length(ids),
       inserted_at: now
     }
 
+    feed = Enum.find(deliveries, &(&1.channel == "feed"))
+
     plan = %{
       config: config,
       notifier: notifier,
+      params: params,
+      known: known,
+      guard: function_exported?(notifier, :notify?, 2),
+      feed_spec: feed,
       event: event,
       category: category,
       required: notifier.__chime__(:required) or category.required,
-      feed: Enum.any?(deliveries, &(&1.channel == "feed")),
+      feed: feed != nil,
       channels: Enum.reject(deliveries, &(&1.channel == "feed")),
       now: now
     }
@@ -80,9 +87,10 @@ defmodule Chime.Notify do
     case first_batch do
       {:ok, counts} ->
         Fanout.notified(config, counts)
-        Enum.each(rest, &rest_batch(plan, &1))
+        notified = map_size(counts) + Enum.sum(Enum.map(rest, &rest_batch(plan, &1)))
+        if notified != length(ids), do: notified(config, event, notified)
 
-        :telemetry.execute([:chime, :notify], %{recipients: length(ids)}, %{
+        :telemetry.execute([:chime, :notify], %{recipients: notified}, %{
           notifier: notifier,
           event_id: event.id
         })
@@ -97,6 +105,13 @@ defmodule Chime.Notify do
   defp rest_batch(%{config: config} = plan, ids) do
     {:ok, counts} = config.repo.transaction(fn -> batch(plan, ids) end)
     Fanout.notified(config, counts)
+    map_size(counts)
+  end
+
+  # The people the guards let through, on the event.
+  defp notified(config, event, n) do
+    from(e in Event, where: e.id == ^event.id)
+    |> config.repo.update_all([set: [recipients: n]], prefix: config.prefix)
   end
 
   # A group is a notifier's own, in its workspace: two notifiers with the
@@ -127,8 +142,10 @@ defmodule Chime.Notify do
     :ok
   end
 
-  # The ids of the people, once each: from :to, or the notifier.
-  defp recipient_ids(config, notifier, params, opts) do
+  # The ids of the people, once each, from :to or the notifier, but the
+  # actor unless the notifier tells them too; and the recipients given
+  # whole, by id, for the guards.
+  defp recipients(config, notifier, params, opts, actor) do
     recipients =
       case Keyword.fetch(opts, :to) do
         {:ok, to} ->
@@ -143,9 +160,16 @@ defmodule Chime.Notify do
           notifier.recipients(params)
       end
 
-    recipients
-    |> Enum.map(&(config.resolver |> Resolver.to_recipient(&1) |> Resolver.id()))
-    |> Enum.uniq()
+    actor_id = actor && (actor["id"] || actor[:id])
+
+    entries =
+      recipients
+      |> Enum.map(&Resolver.to_recipient(config.resolver, &1))
+      |> Enum.uniq_by(&Resolver.id/1)
+      |> Enum.reject(&(Resolver.id(&1) == actor_id and not notifier.__chime__(:notify_actor)))
+
+    {Enum.map(entries, &Resolver.id/1),
+     for(%Chime.Recipient{} = r <- entries, into: %{}, do: {r.id, r})}
   end
 
   # The groups whose window has passed take no more events: once for the
@@ -165,25 +189,118 @@ defmodule Chime.Notify do
   # open group's), the deliveries and their jobs, and their counts.
   defp batch(_plan, []), do: %{}
 
-  defp batch(%{config: config} = plan, ids) do
+  defp batch(plan, ids) do
+    {ids, people} = guard(plan, ids)
+    batch(plan, ids, people)
+  end
+
+  defp batch(_plan, [], _people), do: %{}
+
+  defp batch(%{config: config} = plan, ids, people) do
     # The people's counts locked first, so that what follows sees what
     # other calls for the same people committed, and they wait for this.
     Counts.lock(config, ids)
     kept = Preferences.stored(config, ids, plan.category.key, plan.event.workspace)
 
-    in_feed =
+    # Why each person is not in the feed, or nil when they are.
+    out_of_feed =
       Map.new(ids, fn id ->
-        {setting, _at} =
+        {setting, at} =
           Preferences.setting(plan.category, plan.required, Map.get(kept, id, %{}), "feed")
 
-        {id, plan.feed and setting == "on"}
+        {id, out_of_feed(plan, setting, at, people[id])}
       end)
 
+    in_feed = Map.new(out_of_feed, fn {id, reason} -> {id, plan.feed and reason == nil} end)
+
     {new, joined} = notifications(plan, ids, in_feed)
+    feed_skipped(plan, new, out_of_feed)
     deliveries(plan, new, joined, kept)
 
     Counts.refresh(config, ids)
   end
+
+  # The people of a batch the notifier's guard (notify?/2) lets through,
+  # and the recipients whole when a guard or the feed's conditions need
+  # them: those given, else the resolver's. A person the resolver does
+  # not give is not notified when there is a guard.
+  defp guard(%{guard: false, feed_spec: %{if: [], unless: []}}, ids), do: {ids, %{}}
+  defp guard(%{guard: false, feed_spec: nil}, ids), do: {ids, %{}}
+
+  defp guard(plan, ids) do
+    missing = Enum.reject(ids, &Map.has_key?(plan.known, &1))
+
+    people =
+      if missing == [],
+        do: Map.take(plan.known, ids),
+        else:
+          Map.merge(
+            Map.take(plan.known, ids),
+            Map.new(plan.config.resolver.recipients(missing), &{&1.id, &1})
+          )
+
+    ids =
+      if plan.guard,
+        do: Enum.filter(ids, &(people[&1] && plan.notifier.notify?(plan.params, people[&1]))),
+        else: ids
+
+    {ids, people}
+  end
+
+  # Why a person is not in the feed: turned off, or the feed's own
+  # conditions, of the notifier's functions; nil when they are. A notifier
+  # with no feed has no reason.
+  defp out_of_feed(%{feed_spec: nil}, _setting, _at, _recipient), do: nil
+
+  defp out_of_feed(plan, "off", at, _recipient),
+    do: Chime.Explain.turned_off(plan.category, "feed", at)
+
+  defp out_of_feed(%{feed_spec: %{if: [], unless: []}}, _setting, _at, _recipient), do: nil
+  defp out_of_feed(_plan, _setting, _at, nil), do: "the resolver does not give the person"
+
+  defp out_of_feed(%{feed_spec: spec, notifier: notifier, event: event}, _setting, _at, recipient) do
+    Enum.find_value(spec.unless, fn c ->
+      condition(notifier, c, event.data, recipient) && "unless #{name(c)}"
+    end) ||
+      Enum.find_value(spec.if, fn c ->
+        !condition(notifier, c, event.data, recipient) && "if #{name(c)} was false"
+      end)
+  end
+
+  defp name({module, fun}), do: "#{inspect(module)}.#{fun}"
+  defp name(fun), do: Atom.to_string(fun)
+
+  # A new notification kept out of the feed has a "feed" delivery,
+  # skipped, with the reason, for the log.
+  defp feed_skipped(%{feed: false}, _new, _out), do: :ok
+
+  defp feed_skipped(%{config: config, now: now}, new, out) do
+    rows =
+      for {recipient, id} <- new, reason = out[recipient], reason != nil do
+        %{
+          id: Ecto.UUID.generate(),
+          notification_id: id,
+          recipient: recipient,
+          channel: "feed",
+          status: "skipped",
+          reason: reason,
+          attempts: 0,
+          scheduled_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      end
+
+    rows
+    |> Enum.chunk_every(@batch)
+    |> Enum.each(&config.repo.insert_all(Delivery, &1, prefix: config.prefix))
+  end
+
+  defp condition(notifier, name, data, recipient) when is_atom(name),
+    do: apply(notifier, name, [data, recipient])
+
+  defp condition(_notifier, {module, fun}, data, recipient),
+    do: apply(module, fun, [data, recipient])
 
   # The notifications of a batch: those of an open group take the event,
   # the others are new. {new, joined}, each [{recipient, notification_id}].

@@ -40,5 +40,10 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the marks and the preferences of a workspace; the resolver's
   `resolve_workspace/1` for `Chime.Live` and the JSON API, which also
   takes `?workspace=`.
+- Guards: the notifier's `notify?/2`, checked for each person when the
+  notification comes; `:if` and `:unless` on the feed; the actor left
+  out of the recipients unless `notify_actor: true`; a notification kept
+  out of the feed has a `"feed"` delivery with the reason, for the log.
+  A base module of the app's for its notifiers, in the Notifiers guide.
 - `Chime.Test`, and `mix chime.gen.migration` (`Chime.Migrations`, on
   PostgreSQL and SQLite).

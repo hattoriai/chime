@@ -29,7 +29,6 @@ defmodule Chime.NotifierTest do
     for {code, message} <- [
           {"use Chime.Notifier", ~r/needs a :category/},
           {"use Chime.Notifier, category: :c\ndeliver :feed\ndeliver :feed", ~r/twice/},
-          {"use Chime.Notifier, category: :c\ndeliver :feed, wait: 5", ~r/the feed goes at once/},
           {"use Chime.Notifier, category: :c\ndeliver :email, wait: {1, :year}",
            ~r/:wait must be/},
           {"use Chime.Notifier, category: :c\ndeliver :email, if: :read",
