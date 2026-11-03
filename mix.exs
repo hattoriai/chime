@@ -1,7 +1,7 @@
 defmodule Chime.MixProject do
   use Mix.Project
 
-  @version "0.1.0-dev"
+  @version "0.1.0"
   @source_url "https://github.com/hattoriai/chime"
 
   # CHIME_OLDEST=1 resolves the oldest Phoenix and LiveView that Chime
@@ -195,6 +195,13 @@ defmodule Chime.MixProject do
     [
       # The development server: dev.exs, at http://localhost:4100.
       dev: ["run --no-halt dev.exs"],
+      # On an up-to-date main, after the release pull request: publish
+      # to Hex, then tag the version.
+      release: [
+        "hex.publish --yes",
+        "cmd git tag v#{@version}",
+        "cmd git push origin v#{@version}"
+      ],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",
