@@ -97,5 +97,24 @@ defmodule Chime.LiveTest do
       assert [%{settings: %{"email" => "weekly"}} | _] = Chime.preferences("user:1")
       assert render(view) =~ ~s(<option value="weekly" selected)
     end
+
+    test "the preferences, with the app's own controls", %{conn: conn} do
+      person!(1)
+      {:ok, view, _html} = live(as(conn, "user:1"), "/settings/own")
+      refute render(view) =~ "<select"
+
+      control = element(view, "#prefs-comments-email-setting")
+      assert render(control) =~ ~s(data-options="on=On,daily=Daily,weekly=Weekly,off=Off")
+      assert render(control) =~ ~s(aria-label="Comments: Email")
+
+      view
+      |> element("#prefs-comments-email")
+      |> render_change(%{"category" => "comments", "channel" => "email", "setting" => "daily"})
+
+      assert [%{settings: %{"email" => "daily"}} | _] = Chime.preferences("user:1")
+
+      assert render(view) =~
+               ~s(id="prefs-comments-email-setting" type="text" name="setting" value="daily")
+    end
   end
 end

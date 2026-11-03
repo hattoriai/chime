@@ -9,6 +9,10 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Chime.Components.preferences/1` takes a `:setting` slot: the app draws
+  each channel's control (its own picker) in place of a `<select>`. The
+  slot gets the control's `:id`, `:name`, `:value`, `:options`,
+  `:disabled` and `:label`; the form's change saves it, as before.
 - Notifiers (`Chime.Notifier`): a category, `deliver` for each channel
   with `:wait`, `:if` and `:unless`; `recipients/1`, `data/1`, `actor/1`,
   `group/1`, `feed/2`, `email/3`, and a function for each of the app's

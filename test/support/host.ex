@@ -26,6 +26,19 @@ defmodule ChimeTest.BellLive do
     <Chime.Components.bell chime={@chime} />
     <Chime.Components.feed chime={@chime} />
     <Chime.Components.preferences :if={@live_action == :settings} id="prefs" chime={@chime} />
+    <Chime.Components.preferences :if={@live_action == :own_controls} id="prefs" chime={@chime}>
+      <:setting :let={control}>
+        <input
+          id={control.id}
+          type="text"
+          name={control.name}
+          value={control.value}
+          disabled={control.disabled}
+          aria-label={control.label}
+          data-options={Enum.map_join(control.options, ",", fn {label, value} -> "#{value}=#{label}" end)}
+        />
+      </:setting>
+    </Chime.Components.preferences>
     """
   end
 end
@@ -72,6 +85,7 @@ defmodule ChimeTest.Host do
            live_session :app, on_mount: [ChimeTest.AssignReader, {Chime.Live, limit: 2}] do
              live "/bell", ChimeTest.BellLive, :index
              live "/settings", ChimeTest.BellLive, :settings
+             live "/settings/own", ChimeTest.BellLive, :own_controls
            end
          end
        end)
