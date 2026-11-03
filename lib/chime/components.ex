@@ -124,11 +124,19 @@ defmodule Chime.Components do
     default: %{},
     doc: "the channels' and settings' words: %{\"email\" => \"Email\", \"daily\" => \"Daily\"}"
 
+  slot :setting,
+    doc: """
+    draws the control of a category's channel, in place of a `<select>`: the app's own picker.
+    It gets a map of `:id`, `:name` (\"setting\"), `:value`, `:options` (`[{label, value}]`),
+    `:disabled` and `:label` (its accessible name). The control posts `name` in its form, and
+    the form's change saves it.
+    """
+
   def preferences(%{chime: %State{recipient: nil}} = assigns), do: ~H""
 
   def preferences(assigns) do
     ~H"""
-    <.live_component module={Chime.Components.Preferences} id={@id} recipient={@chime.recipient} labels={@labels} />
+    <.live_component module={Chime.Components.Preferences} id={@id} recipient={@chime.recipient} labels={@labels} setting={@setting} />
     """
   end
 
@@ -176,6 +184,7 @@ defmodule Chime.Components do
       {:ok,
        socket
        |> assign(assigns)
+       |> assign_new(:setting, fn -> [] end)
        |> assign(:channels, Config.channel_names(config))
        |> assign(:rows, Chime.preferences(assigns.recipient))
        |> assign(:error, nil)}
@@ -218,11 +227,12 @@ defmodule Chime.Components do
                 <form id={"#{@id}-#{row.category.key}-#{channel}"} phx-change="set" phx-target={@myself}>
                   <input type="hidden" name="category" value={row.category.key} />
                   <input type="hidden" name="channel" value={channel} />
-                  <select name="setting" disabled={row.category.required} aria-label={"#{t(row.category.label)}: #{label(@labels, channel)}"}>
+                  <select :if={@setting == []} name="setting" disabled={row.category.required} aria-label={"#{t(row.category.label)}: #{label(@labels, channel)}"}>
                     <option :for={setting <- settings(channel)} value={setting} selected={row.settings[channel] == setting}>
                       {label(@labels, setting)}
                     </option>
                   </select>
+                  {if @setting != [], do: render_slot(@setting, control(@id, row, channel, @labels))}
                 </form>
               </td>
             </tr>
@@ -230,6 +240,18 @@ defmodule Chime.Components do
         </table>
       </div>
       """
+    end
+
+    # What the app's own control of a channel gets (the `:setting` slot).
+    defp control(id, row, channel, labels) do
+      %{
+        id: "#{id}-#{row.category.key}-#{channel}-setting",
+        name: "setting",
+        value: row.settings[channel],
+        options: for(setting <- settings(channel), do: {label(labels, setting), setting}),
+        disabled: row.category.required,
+        label: "#{t(row.category.label)}: #{label(labels, channel)}"
+      }
     end
 
     defp settings("email"), do: ~w(on daily weekly off)
