@@ -16,20 +16,6 @@ defmodule Chime.Push.APNs do
   @spec send(Chime.Device.t(), map(), map()) ::
           :ok | {:ok, String.t()} | {:gone, String.t()} | {:error, term()}
   def send(device, payload, apns) do
-    alert = Map.reject(%{title: payload.title, body: payload[:body]}, fn {_k, v} -> is_nil(v) end)
-
-    aps =
-      %{alert: alert, sound: "default"}
-      |> put(:badge, payload[:badge])
-      |> put(:"thread-id", payload[:tag])
-      |> put(:"mutable-content", payload[:image] && 1)
-
-    body =
-      %{aps: aps}
-      |> put(:url, payload[:url])
-      |> put(:image, payload[:image])
-      |> put(:id, payload[:id])
-
     headers =
       [
         {"authorization", "bearer " <> token(apns)},
@@ -44,7 +30,12 @@ defmodule Chime.Push.APNs do
     url = Map.fetch!(@hosts, apns.env) <> "/3/device/" <> device.token
 
     options =
-      [json: body, headers: headers, retry: false, connect_options: [protocols: [:http2]]] ++
+      [
+        json: body(payload),
+        headers: headers,
+        retry: false,
+        connect_options: [protocols: [:http2]]
+      ] ++
         apns.req_options
 
     case Req.post(url, options) do
@@ -64,6 +55,29 @@ defmodule Chime.Push.APNs do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  # The payload: the alert in aps, the app's own keys, then Chime's.
+  defp body(payload) do
+    alert = Map.reject(%{title: payload.title, body: payload[:body]}, fn {_k, v} -> is_nil(v) end)
+
+    # mutable-content lets the app's notification service extension add
+    # the image, or change the notification, before it is shown.
+    aps =
+      %{alert: alert, sound: "default"}
+      |> put(:badge, payload[:badge])
+      |> put(:"thread-id", payload[:tag])
+      |> put(:category, payload[:category])
+      |> put(:"interruption-level", payload[:interruption_level])
+      |> put(:"mutable-content", (payload[:image] || payload[:category]) && 1)
+
+    # The app's own keys, then Chime's, which win.
+    (payload[:data] || %{})
+    |> Map.drop(~w(aps url image id))
+    |> Map.put(:aps, aps)
+    |> put(:url, payload[:url])
+    |> put(:image, payload[:image])
+    |> put(:id, payload[:id])
   end
 
   # The provider token, kept for 50 minutes (APNs takes one of up to an hour).

@@ -18,6 +18,23 @@ defmodule Chime.Channels.Push do
         }
       end
 
+  Three keys more, for an app of a phone's:
+
+    * `:category` - what the app can do from the notification: APNs'
+      `category`, the actions the iOS app registered for it (FCM and Web
+      Push have it in their data, as `"category"`);
+    * `:interruption_level` - `:passive`, `:active` (the default),
+      `:time_sensitive` or `:critical`: APNs' `interruption-level`, and
+      Web Push's urgency (`low`, `normal`, `high`);
+    * `:data` - a map of the app's own, for the app on the device: the
+      ids its actions need. It is at the top of APNs' payload, in FCM's
+      data (as strings) and in Web Push's message, beside Chime's keys,
+      which win.
+
+  An APNs push with an `:image` or a `:category` is `mutable-content`:
+  the app's notification service extension can add the image, or
+  change the notification, before it is shown.
+
   Chime adds:
 
     * the link that opens the notification and reads it in the feed
@@ -101,5 +118,36 @@ defmodule Chime.Channels.Push do
       badge: rendered[:badge],
       tag: rendered[:tag] || n.group_key || n.id
     }
+    |> put(:category, rendered[:category] && to_string(rendered[:category]))
+    |> put(:interruption_level, level(rendered[:interruption_level]))
+    |> put(:data, data(rendered[:data]))
   end
+
+  @levels %{
+    "passive" => "passive",
+    "active" => "active",
+    "time-sensitive" => "time-sensitive",
+    "time_sensitive" => "time-sensitive",
+    "critical" => "critical"
+  }
+
+  # The level as Apple writes it: "time-sensitive", from :time_sensitive too.
+  defp level(nil), do: nil
+
+  defp level(level) do
+    ((is_atom(level) or is_binary(level)) && Map.get(@levels, to_string(level))) ||
+      raise ArgumentError,
+            "the :interruption_level of a push is :passive, :active, :time_sensitive or " <>
+              ":critical, got: #{inspect(level)}"
+  end
+
+  defp data(nil), do: nil
+  defp data(data) when data == %{}, do: nil
+  defp data(%{} = data), do: Map.new(data, fn {k, v} -> {to_string(k), v} end)
+
+  defp data(data),
+    do: raise(ArgumentError, "the :data of a push is a map, got: #{inspect(data)}")
+
+  defp put(map, _key, nil), do: map
+  defp put(map, key, value), do: Map.put(map, key, value)
 end

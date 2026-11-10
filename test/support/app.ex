@@ -403,6 +403,31 @@ defmodule ChimeTest.Pushed do
     do: %{title: "New: " <> data["text"], body: "Open it", url: "/thread", icon: "/icon.png"}
 end
 
+defmodule ChimeTest.Actionable do
+  @moduledoc "A notifier of the tests by push, for a phone's app: a category, a level, data."
+  use Chime.Notifier, category: :comments
+
+  deliver :feed
+  deliver :push
+
+  @impl true
+  def data(params), do: Map.new(params, fn {k, v} -> {to_string(k), v} end)
+
+  @impl true
+  def feed(_data, _notification), do: %{title: "Still there?", url: "/reports/7"}
+
+  def push(data, _recipient, _notification) do
+    %{
+      title: "Still there?",
+      url: "/reports/7",
+      image: data["image"],
+      category: data["category"],
+      interruption_level: data["level"],
+      data: %{report_id: 7, dogs: ["Kai", "Luna"], id: "not Chime's"}
+    }
+  end
+end
+
 defmodule ChimeTest.Everywhere do
   @moduledoc "A notifier of the tests by every channel of Chime's over HTTP."
   use Chime.Notifier, category: :comments

@@ -45,8 +45,13 @@ defmodule Chime.Push.FCM do
     %{
       token: device.token,
       notification: notification,
-      # FCM's data is of strings.
-      data: %{} |> put(:url, payload[:url]) |> put(:id, payload[:id]),
+      # FCM's data is of strings: the app's own, then Chime's, which win.
+      data:
+        (payload[:data] || %{})
+        |> Map.new(fn {k, v} -> {k, string(v)} end)
+        |> put("url", payload[:url])
+        |> put("id", payload[:id])
+        |> put("category", payload[:category]),
       android:
         %{notification: %{} |> put(:tag, payload[:tag]) |> put(:icon, payload[:icon])}
         |> put(:collapse_key, payload[:tag]),
@@ -111,6 +116,10 @@ defmodule Chime.Push.FCM do
         end
     end
   end
+
+  defp string(value) when is_binary(value), do: value
+  defp string(value) when is_number(value) or is_atom(value), do: to_string(value)
+  defp string(value), do: JSON.encode!(value)
 
   defp put(map, _key, nil), do: map
   defp put(map, key, value), do: Map.put(map, key, value)

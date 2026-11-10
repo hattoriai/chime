@@ -20,7 +20,7 @@ defmodule Chime.Push.WebPush do
       {"content-encoding", "aes128gcm"},
       {"content-type", "application/octet-stream"},
       {"ttl", to_string(web.ttl)},
-      {"urgency", "normal"}
+      {"urgency", urgency(payload[:interruption_level])}
     ]
 
     # A newer message of the same tag replaces the one not yet shown.
@@ -40,6 +40,11 @@ defmodule Chime.Push.WebPush do
         {:error, error}
     end
   end
+
+  # The urgency of RFC 8030 for an interruption level of Apple's.
+  defp urgency("passive"), do: "low"
+  defp urgency(level) when level in ["time-sensitive", "critical"], do: "high"
+  defp urgency(_level), do: "normal"
 
   # The VAPID token of an endpoint's origin, for 12 hours.
   defp vapid(endpoint, web) do

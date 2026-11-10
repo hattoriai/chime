@@ -5,6 +5,23 @@ All notable changes to Chime are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- A push for a phone's app: the notifier's `push/3` takes `:category`
+  (APNs' `category`, the actions the app registered),
+  `:interruption_level` (`:passive`, `:active`, `:time_sensitive` or
+  `:critical`; APNs' `interruption-level`, Web Push's urgency) and
+  `:data`, a map of the app's own (the ids its actions need), at the top
+  of APNs' payload, in FCM's data and in Web Push's message. See the
+  [Push](guides/push.md) guide.
+
+### Changed
+
+- An APNs push with a `:category` is `mutable-content` too, as one with
+  an `:image` was: the app's notification service extension runs for it.
+
 ## 0.1.0 (2026-11-03)
 
 The first release.
