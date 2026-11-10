@@ -26,7 +26,7 @@ defmodule Chime.Notify do
     now = opts |> Keyword.get_lazy(:now, &DateTime.utc_now/0) |> Chime.Schema.usec()
     category = Config.category(config, notifier.__chime__(:category))
 
-    deliveries = notifier.__chime__(:deliveries)
+    deliveries = deliveries(config, notifier)
     Enum.each(deliveries, &check_channel(config, notifier, &1.channel))
 
     actor = notifier.actor(params)
@@ -140,7 +140,7 @@ defmodule Chime.Notify do
         config,
         notifier,
         Map.take(event, [:id, :kind, :category, :workspace, :data, :actor, :group_key]),
-        notifier.__chime__(:deliveries),
+        deliveries(config, notifier),
         now,
         []
       )
@@ -435,6 +435,14 @@ defmodule Chime.Notify do
       :error -> notifier.workspace(params) |> then(&(&1 && to_string(&1)))
     end
   end
+
+  # The notifier's deliveries; `deliver :push` waits for the app's push
+  # keys: without `:push` in the config, it is not there, and nothing
+  # raises (an app declares its pushes before it has the keys).
+  defp deliveries(%Config{push: nil}, notifier),
+    do: Enum.reject(notifier.__chime__(:deliveries), &(&1.channel == "push"))
+
+  defp deliveries(_config, notifier), do: notifier.__chime__(:deliveries)
 
   defp check_channel(_config, _notifier, "feed"), do: :ok
 

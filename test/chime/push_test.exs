@@ -337,6 +337,15 @@ defmodule Chime.PushTest do
       end)
     end
 
+    test "without :push in the config, deliver :push is skipped, and nothing raises", ctx do
+      reconfigure(ctx, push: nil)
+      ana = person!(1)
+
+      assert {:ok, _} = Chime.notify(ChimeTest.Pushed, %{text: "Hi"}, to: ana)
+      assert deliver(channel: :push) == []
+      assert [_] = Chime.feed("user:1")
+    end
+
     test "the devices in the JSON API", %{conn: conn} do
       person!(1)
       conn = as(conn, "user:1")

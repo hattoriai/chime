@@ -39,7 +39,8 @@ config :my_app, :chime_push,
 ```
 
 Give only the services you use. With `:push`, the `:push` channel is
-there, and in the preferences. Chime sends with `Req`: add
+there, and in the preferences. Without it (in development, in the tests,
+before you have the keys), a notifier's `deliver :push` is skipped. Chime sends with `Req`: add
 `{:req, "~> 0.5"}` to your deps.
 
 ## A notifier
