@@ -59,7 +59,44 @@ def push(data, _recipient, notification) do
 end
 ```
 
-Without `push/3`, a push says what the feed says. Chime adds the link
+Without `push/3`, a push says what the feed says.
+
+### For a phone's app
+
+Three keys more tell an app on a phone what it can do with the push:
+
+```elixir
+def push(data, _recipient, _notification) do
+  %{
+    title: "Ice on the road",
+    url: "/reports/#{data["report_id"]}",
+    image: data["photo_url"],
+    category: "report",
+    interruption_level: :time_sensitive,
+    data: %{report_id: data["report_id"]}
+  }
+end
+```
+
+| Key | What | APNs | FCM | Web Push |
+| --- | --- | --- | --- | --- |
+| `:category` | the actions the app registered for it ("Mark as done") | `aps.category` | `"category"` in the data | in the message |
+| `:interruption_level` | `:passive`, `:active` (the default), `:time_sensitive` or `:critical` | `aps.interruption-level` | | the urgency: `low`, `normal`, `high` |
+| `:data` | a map of the app's own: the ids its actions need | at the top of the payload | the data, as strings | `data` in the message |
+
+Chime's keys (`aps`, `url`, `image`, `id`) win over the same keys in
+`:data`. An APNs push with an `:image` or a `:category` is
+`mutable-content`: the app's notification service extension can download
+the image and add it, before the notification is shown.
+
+A time-sensitive notification shows through a Focus, and needs the app's
+"Time Sensitive Notifications" capability; a critical one sounds when the
+phone is silent, and needs Apple's permission for the app. Without them,
+iOS shows the push as an active one.
+
+### The link, the tag and the rules
+
+Chime adds the link
 that reads the notification in the feed when the push is opened
 (`Chime.link/2`), and the notification's group as its tag: a newer push
 of the group replaces the one on the device (the tag of Web Push and

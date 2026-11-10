@@ -157,6 +157,8 @@ defmodule Chime.PushTest do
              } =
                JSON.decode!(apns_body)
 
+      refute Map.has_key?(JSON.decode!(apns_body)["aps"], "mutable-content")
+
       assert_received {"oauth2.googleapis.com", "/token", _oauth, oauth_body}
       assert oauth_body =~ "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"
 
@@ -174,6 +176,118 @@ defmodule Chime.PushTest do
                  "webpush" => %{"notification" => %{"tag" => "pushed:thread", "renotify" => true}}
                }
              } = JSON.decode!(fcm_body)
+    end
+
+    test "a push for a phone's app: its category, its level and its data" do
+      ana = person!(1)
+      b = browser()
+      {:ok, _} = Chime.register_device("user:1", %{kind: "apns", token: "a1b2c3"})
+      {:ok, _} = Chime.register_device("user:1", %{kind: "fcm", token: "fcm-token"})
+
+      {:ok, _} =
+        Chime.register_device("user:1", %{
+          kind: "web",
+          token: "https://push.example.com/send/abc",
+          keys: %{"p256dh" => b64(b.public), "auth" => b64(b.auth)}
+        })
+
+      test = self()
+
+      Req.Test.stub(Chime.Push, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test, {conn.host, conn, body})
+
+        case conn.host do
+          "oauth2.googleapis.com" -> Req.Test.json(conn, %{access_token: "t", expires_in: 3600})
+          "fcm.googleapis.com" -> Req.Test.json(conn, %{name: "projects/app-test/messages/1"})
+          _ -> Plug.Conn.send_resp(conn, 200, "")
+        end
+      end)
+
+      {:ok, _} =
+        Chime.notify(ChimeTest.Actionable, %{category: "report", level: :time_sensitive}, to: ana)
+
+      assert [%Delivery{status: "sent", ref: "3 of 3 devices"}] = deliver(channel: :push)
+
+      assert_received {"api.push.apple.com", _apns, apns_body}
+      apns = JSON.decode!(apns_body)
+
+      assert %{
+               "category" => "report",
+               "interruption-level" => "time-sensitive",
+               # The app's notification service extension runs.
+               "mutable-content" => 1
+             } = apns["aps"]
+
+      # The app's data at the top, and Chime's id, not the app's.
+      assert %{"report_id" => 7, "dogs" => ["Kai", "Luna"]} = apns
+      assert {:ok, _} = Ecto.UUID.cast(apns["id"])
+
+      assert_received {"fcm.googleapis.com", _fcm, fcm_body}
+
+      assert %{"category" => "report", "report_id" => "7", "dogs" => ~s(["Kai","Luna"])} =
+               JSON.decode!(fcm_body)["message"]["data"]
+
+      assert_received {"push.example.com", web, web_body}
+      assert ["high"] = Plug.Conn.get_req_header(web, "urgency")
+
+      assert %{
+               "category" => "report",
+               "interruption_level" => "time-sensitive",
+               "data" => %{"report_id" => 7}
+             } = decrypt(web_body, b)
+    end
+
+    test "without a category or an image, an APNs push is not mutable; a passive one is low" do
+      ana = person!(1)
+      b = browser()
+      {:ok, _} = Chime.register_device("user:1", %{kind: "apns", token: "a1b2c3"})
+
+      {:ok, _} =
+        Chime.register_device("user:1", %{
+          kind: "web",
+          token: "https://push.example.com/send/abc",
+          keys: %{"p256dh" => b64(b.public), "auth" => b64(b.auth)}
+        })
+
+      test = self()
+
+      Req.Test.stub(Chime.Push, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test, {conn.host, conn, body})
+        Plug.Conn.send_resp(conn, 200, "")
+      end)
+
+      {:ok, _} = Chime.notify(ChimeTest.Actionable, %{level: "passive"}, to: ana)
+      assert [%Delivery{status: "sent"}] = deliver(channel: :push)
+
+      assert_received {"api.push.apple.com", _apns, apns_body}
+      aps = JSON.decode!(apns_body)["aps"]
+      assert aps["interruption-level"] == "passive"
+      refute Map.has_key?(aps, "category")
+      refute Map.has_key?(aps, "mutable-content")
+
+      assert_received {"push.example.com", web, _body}
+      assert ["low"] = Plug.Conn.get_req_header(web, "urgency")
+
+      {:ok, _} = Chime.notify(ChimeTest.Actionable, %{image: "https://cdn.test/a.jpg"}, to: ana)
+      assert [%Delivery{status: "sent"}] = deliver(channel: :push)
+      assert_received {"api.push.apple.com", _apns, apns_body}
+      aps = JSON.decode!(apns_body)["aps"]
+      assert aps["mutable-content"] == 1
+      refute Map.has_key?(aps, "interruption-level")
+      assert_received {"push.example.com", web, _body}
+      assert ["normal"] = Plug.Conn.get_req_header(web, "urgency")
+    end
+
+    test "a push's interruption level is one of Apple's" do
+      ana = person!(1)
+      {:ok, _} = Chime.register_device("user:1", %{kind: "apns", token: "a1b2c3"})
+      {:ok, _} = Chime.notify(ChimeTest.Actionable, %{level: "loud"}, to: ana)
+
+      assert_raise ArgumentError, ~r/:interruption_level of a push is :passive/, fn ->
+        deliver(channel: :push)
+      end
     end
 
     test "a device a service says is gone is forgotten, and the log says so" do
