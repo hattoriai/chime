@@ -85,6 +85,7 @@ defmodule Chime.APITest do
              } = comments
 
       assert %{"key" => "billing", "required" => true} = billing
+      assert comments["channels"] == ["feed", "email", "telegram"]
       assert %{"key" => "email", "settings" => ["on", "daily", "weekly", "off"]} in channels
 
       assert %{"categories" => [%{"settings" => %{"email" => "daily", "feed" => "off"}} | _]} =
@@ -109,6 +110,29 @@ defmodule Chime.APITest do
 
       # Nothing of a refused change is kept.
       assert [%{settings: %{"email" => "daily"}} | _] = Chime.preferences("user:1")
+    end
+
+    test "a category's channels: its settings and changes are only those", %{conn: conn} = ctx do
+      reconfigure(ctx, categories: [likes: [label: "Likes", channels: [:feed]]])
+      conn = as(conn, "user:1")
+
+      assert %{
+               "categories" => [
+                 %{"key" => "likes", "channels" => ["feed"], "settings" => settings}
+               ]
+             } =
+               conn |> get("/api/notifications/preferences") |> json_response(200)
+
+      assert settings == %{"feed" => "on"}
+
+      assert %{"error" => "unknown_channel", "category" => "likes", "channel" => "email"} =
+               conn
+               |> put_req_header("content-type", "application/json")
+               |> put(
+                 "/api/notifications/preferences",
+                 JSON.encode!(%{preferences: %{likes: %{email: "off"}}})
+               )
+               |> json_response(422)
     end
 
     test "a token of Chime's, as a bearer or in the query", %{conn: conn} do

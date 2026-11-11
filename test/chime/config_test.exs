@@ -48,10 +48,37 @@ defmodule Chime.ConfigTest do
           {@base ++ [digest: [at: 24]], ~r/an hour/},
           {@base ++ [digest: [weekly_on: :someday]], ~r/a day/},
           {@base ++ [keep_days: 0], ~r/:keep_days/},
-          {@base ++ [oban: "x"], ~r/:oban/}
+          {@base ++ [oban: "x"], ~r/:oban/},
+          {@base ++ [categories: [comments: [channels: [:sms]]]],
+           ~r/name "sms", which is not a channel/},
+          {@base ++ [categories: [comments: [channels: ["feed"]]]], ~r/channel names \(atoms\)/},
+          {@base ++ [categories: [comments: [channels: []]]], ~r/a list of channels/}
         ] do
       assert_raise ArgumentError, message, fn -> Config.new(opts) end
     end
+  end
+
+  test "a category's channels: those it names, in the config's order; else all" do
+    config =
+      Config.new(
+        @base ++
+          [
+            categories: [likes: [channels: [:telegram, :feed]], comments: []],
+            channels: [telegram: ChimeTest.Telegram]
+          ]
+      )
+
+    assert Config.category_channels(config, Config.category(config, "likes")) == [
+             "feed",
+             "telegram"
+           ]
+
+    assert Config.category_channels(config, Config.category(config, "comments")) == [
+             "feed",
+             "telegram"
+           ]
+
+    assert Config.category(config, "comments").channels == nil
   end
 
   test "a category the config does not name" do

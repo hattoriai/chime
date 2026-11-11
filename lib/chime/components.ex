@@ -224,7 +224,7 @@ defmodule Chime.Components do
                 <small :if={row.category.description}>{t(row.category.description)}</small>
               </th>
               <td :for={channel <- @channels}>
-                <form id={"#{@id}-#{row.category.key}-#{channel}"} phx-change="set" phx-target={@myself}>
+                <form :if={Map.has_key?(row.settings, channel)} id={"#{@id}-#{row.category.key}-#{channel}"} phx-change="set" phx-target={@myself}>
                   <input type="hidden" name="category" value={row.category.key} />
                   <input type="hidden" name="channel" value={channel} />
                   <select :if={@setting == []} name="setting" disabled={row.category.required} aria-label={"#{t(row.category.label)}: #{label(@labels, channel)}"}>

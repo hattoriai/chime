@@ -162,9 +162,11 @@ GET /api/v1/notifications/preferences
 {
   "categories": [
     {"key": "comments", "label": "Comments", "description": "On your stories", "required": false,
-     "settings": {"feed": "on", "email": "daily"}},
+     "channels": ["feed", "email"], "settings": {"feed": "on", "email": "daily"}},
     {"key": "billing", "label": "Billing", "description": null, "required": true,
-     "settings": {"feed": "on", "email": "on"}}
+     "channels": ["feed", "email"], "settings": {"feed": "on", "email": "on"}},
+    {"key": "likes", "label": "Likes", "description": null, "required": false,
+     "channels": ["feed"], "settings": {"feed": "on"}}
   ],
   "channels": [
     {"key": "feed", "settings": ["on", "off"]},
@@ -180,8 +182,13 @@ Content-Type: application/json
 {"preferences": {"comments": {"email": "weekly"}}}
 ```
 
+A category's `"channels"` are the ones it has a setting for: its
+`:channels` in the config, else every channel. Show a switch only for
+these.
+
 A change that cannot be made (a required category, an unknown category
-or channel, a setting the channel does not have) is a 422 with
+or channel, a channel the category does not use, a setting the channel
+does not have) is a 422 with
 `{"error", "category", "channel"}`, and none of the request's changes is
 kept.
 
