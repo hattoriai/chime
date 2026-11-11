@@ -21,6 +21,9 @@ and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - An APNs push with a `:category` is `mutable-content` too, as one with
   an `:image` was: the app's notification service extension runs for it.
+- `deliver :push` is skipped while the config has no `:push`: an app can
+  declare its pushes before it has the keys (its development, its tests),
+  where it raised an `ArgumentError` before.
 
 ## 0.1.0 (2026-11-03)
 
