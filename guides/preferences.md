@@ -12,7 +12,8 @@ categories: [
   comments: [label: "Comments", description: "On your stories"],
   followers: [label: "New followers", defaults: [email: :weekly]],
   mentions: [label: "Mentions", defaults: [email: :on, telegram: :off]],
-  billing: [label: "Billing", required: true]
+  billing: [label: "Billing", required: true],
+  friends_nearby: [label: "Friends nearby", channels: [:feed, :push]]
 ]
 ```
 
@@ -23,6 +24,11 @@ categories: [
 * `:required` - its notifications go whatever the settings, and their
   emails have no link to unsubscribe: receipts, security, the account.
   Its settings cannot be changed.
+* `:channels` - the channels its notifiers deliver to, when not all:
+  `[:feed, :push]`. The preferences give a setting only for these, so a
+  person never sees a switch that does nothing; `put_preference/4` for
+  another channel is `{:error, :unknown_channel}`. Each must be a channel
+  of the config, or Chime raises at start.
 
 Every notifier has a category of the config. Without `:categories`, any
 category is taken, with every channel on, and the preferences show none.

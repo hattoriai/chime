@@ -98,6 +98,20 @@ defmodule Chime.LiveTest do
       assert render(view) =~ ~s(<option value="weekly" selected)
     end
 
+    test "the preferences: no control for a channel the category does not use",
+         %{conn: conn} = ctx do
+      reconfigure(ctx,
+        categories: [comments: [label: "Comments"], likes: [label: "Likes", channels: [:feed]]]
+      )
+
+      person!(1)
+      {:ok, view, _html} = live(as(conn, "user:1"), "/settings")
+
+      assert has_element?(view, "#prefs-comments-email")
+      assert has_element?(view, "#prefs-likes-feed")
+      refute has_element?(view, "#prefs-likes-email")
+    end
+
     test "the preferences, with the app's own controls", %{conn: conn} do
       person!(1)
       {:ok, view, _html} = live(as(conn, "user:1"), "/settings/own")

@@ -51,8 +51,10 @@ defmodule Chime.API do
     * `DELETE /devices/:id` - removes it.
     * `GET /preferences` - the person's settings:
       `{"categories": [{"key", "label", "description", "required",
-      "settings": {"feed": "on", "email": "daily"}}], "channels": [{"key":
-      "email", "settings": ["on", "daily", "weekly", "off"]}]}`.
+      "channels": ["feed", "email"], "settings": {"feed": "on", "email":
+      "daily"}}], "channels": [{"key": "email", "settings": ["on", "daily",
+      "weekly", "off"]}]}`. A category's `"channels"` are those it has a
+      setting for (its `:channels` in the config, else all).
     * `PUT /preferences` - changes settings, with
       `{"preferences": {"comments": {"email": "daily"}}}` as the body:
       the settings as `GET` gives them, or a 422 with
@@ -391,6 +393,7 @@ defmodule Chime.API do
             label: Messages.t(c.label),
             description: c.description && Messages.t(c.description),
             required: c.required,
+            channels: Config.category_channels(config, c),
             settings: s
           }
         end),

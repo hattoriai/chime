@@ -83,8 +83,6 @@ defmodule Chime.Preferences do
   def for_recipient(%Config{categories: nil}, _recipient, _workspace), do: []
 
   def for_recipient(%Config{} = config, recipient, workspace) when is_binary(recipient) do
-    channels = Config.channel_names(config)
-
     kept =
       from(p in Preference,
         where: p.recipient == ^recipient and p.workspace in ^Enum.uniq(["", workspace || ""]),
@@ -102,7 +100,7 @@ defmodule Chime.Preferences do
       %{
         category: category,
         settings:
-          Map.new(channels, fn channel ->
+          Map.new(Config.category_channels(config, category), fn channel ->
             {setting, _at} = setting(category, category.required, kept, channel)
             {channel, setting}
           end)
@@ -122,7 +120,7 @@ defmodule Chime.Preferences do
   def put(%Config{} = config, recipient, category, channel, setting, workspace \\ nil)
       when is_binary(recipient) do
     with {:ok, spec} <- category(config, category),
-         :ok <- check_channel(config, channel),
+         :ok <- check_channel(config, spec, channel),
          :ok <- check_setting(channel, setting) do
       if spec.required,
         do: {:error, :required},
@@ -201,8 +199,10 @@ defmodule Chime.Preferences do
     end
   end
 
-  defp check_channel(config, channel) do
-    if channel in Config.channel_names(config), do: :ok, else: {:error, :unknown_channel}
+  defp check_channel(config, category, channel) do
+    if channel in Config.category_channels(config, category),
+      do: :ok,
+      else: {:error, :unknown_channel}
   end
 
   defp check_setting("email", setting) when setting in ~w(on off daily weekly), do: :ok

@@ -47,6 +47,11 @@ defmodule Chime.Config do
         * `:defaults` - the setting of each channel for a person who has
           not changed it: `[email: :daily, feed: :on]`. A channel not
           named is `:on`.
+        * `:channels` - the channels its notifiers deliver to, when not
+          all: `[:feed, :push]`. The preferences give a setting only for
+          these, so that a person never sees a switch that does nothing.
+          Each must be a channel of the config. Every channel when it is
+          not given.
 
       Without it, every notifier's category is taken, with every channel
       on, and the preferences show none.
@@ -137,7 +142,8 @@ defmodule Chime.Config do
           label: String.t(),
           description: String.t() | nil,
           required: boolean(),
-          defaults: %{String.t() => String.t()}
+          defaults: %{String.t() => String.t()},
+          channels: [String.t()] | nil
         }
 
   @type t :: %__MODULE__{
@@ -196,6 +202,7 @@ defmodule Chime.Config do
       keep_days: keep_days(Keyword.get(opts, :keep_days, 180)),
       scheduler: scheduler(Keyword.get(opts, :scheduler, true))
     }
+    |> check_category_channels()
   end
 
   @doc false
@@ -227,6 +234,15 @@ defmodule Chime.Config do
   end
 
   @doc false
+  # The channels a person can set for a category, in the order of
+  # channel_names/1: those of its :channels, else every one.
+  @spec category_channels(t(), category()) :: [String.t()]
+  def category_channels(%__MODULE__{} = config, %{channels: channels}) when is_list(channels),
+    do: Enum.filter(channel_names(config), &(&1 in channels))
+
+  def category_channels(%__MODULE__{} = config, _category), do: channel_names(config)
+
+  @doc false
   # The channels a person can set, in order: the feed, email when the
   # app has a mailer, then the app's own.
   @spec channel_names(t()) :: [String.t()]
@@ -247,7 +263,33 @@ defmodule Chime.Config do
   end
 
   defp default_category(key) do
-    %{key: key, label: label(key), description: nil, required: false, defaults: %{}}
+    %{
+      key: key,
+      label: label(key),
+      description: nil,
+      required: false,
+      defaults: %{},
+      channels: nil
+    }
+  end
+
+  # Each channel a category names is one of the config's: a typo would
+  # hide a switch the person needs.
+  defp check_category_channels(%__MODULE__{categories: nil} = config), do: config
+
+  defp check_category_channels(%__MODULE__{categories: categories} = config) do
+    names = channel_names(config)
+
+    for %{key: key, channels: channels} <- categories, is_list(channels), channel <- channels do
+      unless channel in names do
+        raise ArgumentError,
+              "the :channels of the category #{inspect(key)} name #{inspect(channel)}, " <>
+                "which is not a channel of Chime's config: " <>
+                Enum.map_join(names, ", ", &inspect/1)
+      end
+    end
+
+    config
   end
 
   defp label(key), do: key |> String.replace("_", " ") |> String.capitalize()
@@ -318,8 +360,28 @@ defmodule Chime.Config do
       description: opts[:description],
       required: Keyword.get(opts, :required, false) == true,
       defaults:
-        Map.new(defaults, fn {channel, s} -> {Atom.to_string(channel), Atom.to_string(s)} end)
+        Map.new(defaults, fn {channel, s} -> {Atom.to_string(channel), Atom.to_string(s)} end),
+      channels: category_channels_option(key, opts[:channels])
     }
+  end
+
+  defp category_channels_option(_key, nil), do: nil
+
+  defp category_channels_option(key, channels) when is_list(channels) and channels != [] do
+    Enum.map(channels, fn
+      channel when is_atom(channel) ->
+        Atom.to_string(channel)
+
+      other ->
+        raise ArgumentError,
+              ":channels of the category #{inspect(key)} must be channel names (atoms), " <>
+                "got: #{inspect(other)}"
+    end)
+  end
+
+  defp category_channels_option(key, other) do
+    raise ArgumentError,
+          ":channels of the category #{inspect(key)} must be a list of channels, got: #{inspect(other)}"
   end
 
   defp channels(channels, push) when is_list(channels) do

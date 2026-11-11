@@ -5,6 +5,20 @@ All notable changes to Chime are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- A category's `:channels`: the channels its notifiers deliver to, when
+  not all (`friends: [label: "Friends", channels: [:feed, :push]]`).
+  The preferences (`Chime.preferences/1`, the component, and the JSON
+  API's `GET /preferences`, whose categories now have `"channels"`) give
+  a setting only for these, so a person never sees a switch that does
+  nothing; `put_preference/4` for another channel is
+  `{:error, :unknown_channel}`. A channel that is not one of the
+  config's raises at start. Without it, nothing changes. See the
+  [Preferences](guides/preferences.md) guide. (#25)
+
 ## 0.3.0 (2026-11-11)
 
 ### Added

@@ -31,6 +31,29 @@ defmodule Chime.PreferencesTest do
                Chime.put_preference("user:1", :comments, :email, :hourly)
     end
 
+    test "a category with its :channels: a setting only for those", ctx do
+      reconfigure(ctx,
+        categories: [
+          comments: [label: "Comments"],
+          likes: [label: "Likes", channels: [:feed, :telegram]]
+        ]
+      )
+
+      person!(1)
+
+      assert [%{settings: comments}, %{category: %{key: "likes"}, settings: likes}] =
+               Chime.preferences("user:1")
+
+      assert Map.keys(comments) == ["email", "feed", "telegram"]
+      assert likes == %{"feed" => "on", "telegram" => "on"}
+
+      assert :ok = Chime.put_preference("user:1", :likes, :telegram, :off)
+      assert {:error, :unknown_channel} = Chime.put_preference("user:1", :likes, :email, :off)
+
+      assert [_, %{settings: %{"feed" => "on", "telegram" => "off"}}] =
+               Chime.preferences("user:1")
+    end
+
     test "a channel turned off is skipped at once, and the log says when" do
       ana = person!(1, telegram: "chat")
       :ok = Chime.put_preference("user:1", :comments, :email, :off)
