@@ -407,6 +407,64 @@ defmodule Chime.PushTest do
       assert [_] = Chime.devices("user:2")
     end
 
+    test "a Live Activity: updated, then ended, with its own push type and topic" do
+      test = self()
+
+      Req.Test.stub(Chime.Push, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test, {:apns, conn, JSON.decode!(body)})
+
+        conn
+        |> Plug.Conn.put_resp_header("apns-id", "apple-9")
+        |> Plug.Conn.send_resp(200, "")
+      end)
+
+      assert {:ok, "apple-9"} =
+               Chime.LiveActivity.update("act-1", %{"dogs" => 3},
+                 stale_date: ~U[2026-11-11 10:30:00Z],
+                 alert: %{title: "Ana is here"},
+                 timestamp: ~U[2026-11-11 10:00:00Z]
+               )
+
+      assert_received {:apns, conn, body}
+      assert conn.request_path == "/3/device/act-1"
+      assert ["bearer " <> _] = Plug.Conn.get_req_header(conn, "authorization")
+      assert ["liveactivity"] = Plug.Conn.get_req_header(conn, "apns-push-type")
+      assert ["test.app.push-type.liveactivity"] = Plug.Conn.get_req_header(conn, "apns-topic")
+      assert ["10"] = Plug.Conn.get_req_header(conn, "apns-priority")
+
+      assert body == %{
+               "aps" => %{
+                 "event" => "update",
+                 "timestamp" => 1_794_391_200,
+                 "content-state" => %{"dogs" => 3},
+                 "stale-date" => 1_794_393_000,
+                 "alert" => %{"title" => "Ana is here"}
+               }
+             }
+
+      assert {:ok, _} =
+               Chime.LiveActivity.finish("act-1", %{"dogs" => 0},
+                 dismissal_date: ~U[2026-11-11 10:00:00Z],
+                 priority: :low
+               )
+
+      assert_received {:apns, conn, %{"aps" => aps}}
+      assert ["5"] = Plug.Conn.get_req_header(conn, "apns-priority")
+      assert %{"event" => "end", "dismissal-date" => 1_794_391_200} = aps
+      refute Map.has_key?(aps, "alert")
+    end
+
+    test "a Live Activity APNs no longer knows is gone" do
+      Req.Test.stub(Chime.Push, &Plug.Conn.send_resp(&1, 410, ""))
+      assert {:gone, _} = Chime.LiveActivity.finish("over", %{})
+    end
+
+    test "a Live Activity needs :apns", ctx do
+      reconfigure(ctx, push: Keyword.take(push_config(), [:web, :req_options]))
+      assert {:error, :no_apns} = Chime.LiveActivity.update("act-1", %{})
+    end
+
     test "push is a channel of the preferences" do
       person!(1)
       assert [%{settings: %{"push" => "on"}} | _] = Chime.preferences("user:1")

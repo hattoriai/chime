@@ -1,7 +1,7 @@
 defmodule Chime.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @source_url "https://github.com/hattoriai/chime"
 
   # CHIME_OLDEST=1 resolves the oldest Phoenix and LiveView that Chime
@@ -165,6 +165,7 @@ defmodule Chime.MixProject do
           Chime.Message,
           Chime.Channels.Email,
           Chime.Channels.Push,
+          Chime.LiveActivity,
           Chime.Channels.Slack,
           Chime.Channels.Discord,
           Chime.Channels.Teams,

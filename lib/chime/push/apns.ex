@@ -17,22 +17,36 @@ defmodule Chime.Push.APNs do
           :ok | {:ok, String.t()} | {:gone, String.t()} | {:error, term()}
   def send(device, payload, apns) do
     headers =
-      [
-        {"authorization", "bearer " <> token(apns)},
-        {"apns-topic", apns.topic},
-        {"apns-push-type", "alert"},
-        {"apns-priority", "10"}
-      ]
+      [{"apns-topic", apns.topic}, {"apns-push-type", "alert"}, {"apns-priority", "10"}]
       |> then(
         &if(payload[:tag], do: [{"apns-collapse-id", collapse_id(payload.tag)} | &1], else: &1)
       )
 
-    url = Map.fetch!(@hosts, apns.env) <> "/3/device/" <> device.token
+    post(device.token, headers, body(payload), apns)
+  end
+
+  @doc false
+  # A Live Activity's push (Chime.LiveActivity): its own push type, and
+  # the app's topic with ".push-type.liveactivity"
+  @spec live_activity(String.t(), map(), 5 | 10, map()) ::
+          {:ok, String.t()} | {:gone, String.t()} | {:error, term()}
+  def live_activity(token, aps, priority, apns) do
+    headers = [
+      {"apns-topic", apns.topic <> ".push-type.liveactivity"},
+      {"apns-push-type", "liveactivity"},
+      {"apns-priority", Integer.to_string(priority)}
+    ]
+
+    post(token, headers, %{aps: aps}, apns)
+  end
+
+  defp post(token, headers, body, apns) do
+    url = Map.fetch!(@hosts, apns.env) <> "/3/device/" <> token
 
     options =
       [
-        json: body(payload),
-        headers: headers,
+        json: body,
+        headers: [{"authorization", "bearer " <> token(apns)} | headers],
         retry: false,
         connect_options: [protocols: [:http2]]
       ] ++

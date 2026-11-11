@@ -156,6 +156,37 @@ Content-Type: application/json
 `"fcm"` for Firebase's tokens (Android, or iOS through Firebase). A token
 registered again, by another person, is that person's device now.
 
+## Live Activities
+
+A Live Activity on an iPhone (a delivery, a match, a walk) changes, and
+ends, by a push of its own: `Chime.LiveActivity`, with the same `:apns`
+keys. The app starts the activity, asks it for its push token
+(`pushTokenUpdates`), and sends the token to your server, with what the
+activity is about. Keep it there: it is not a device of the person, and
+it is no notification.
+
+```elixir
+# What the activity shows changed
+Chime.LiveActivity.update(token, %{"status" => "On the way", "eta" => 12},
+  stale_date: DateTime.add(DateTime.utc_now(), 15, :minute)
+)
+
+# It is over: end it, and take it off the lock screen now
+Chime.LiveActivity.finish(token, %{"status" => "Delivered"},
+  dismissal_date: DateTime.utc_now()
+)
+```
+
+The content state is the app's `ActivityAttributes.ContentState`, as JSON.
+End an activity from the server when the app cannot: the phone may be off,
+or iOS may have stopped the app. Without `:dismissal_date`, iOS keeps an
+ended activity on the lock screen for up to four hours. `{:gone, reason}`
+means the activity is over on the device: forget its token.
+
+The topic is your app's bundle ID with `.push-type.liveactivity`, as APNs
+asks; Chime adds it. Apple limits the high-priority updates an app sends in
+an hour: `priority: :low` for those that can wait.
+
 ## Devices
 
 `GET /devices`, `PATCH /devices/:id` with `{"enabled": false}` (the
