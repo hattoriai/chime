@@ -165,6 +165,7 @@ defmodule Chime.MixProject do
           Chime.Message,
           Chime.Channels.Email,
           Chime.Channels.Push,
+          Chime.LiveActivity,
           Chime.Channels.Slack,
           Chime.Channels.Discord,
           Chime.Channels.Teams,

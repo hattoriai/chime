@@ -5,6 +5,16 @@ All notable changes to Chime are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 (2026-11-11)
+
+### Added
+
+- `Chime.LiveActivity`: an iPhone's Live Activity, changed
+  (`update/3`) or ended (`finish/3`) from the server, by APNs'
+  `liveactivity` push with the config's `:apns` keys. An app can end an
+  activity when the phone cannot. See the [Push](guides/push.md#live-activities)
+  guide.
+
 ## 0.2.0 (2026-11-10)
 
 ### Added
