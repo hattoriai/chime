@@ -5,7 +5,7 @@ All notable changes to Chime are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Chime follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.4.0 (2026-11-11)
 
 ### Added
 
